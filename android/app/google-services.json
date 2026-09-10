@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "601113409800",
+    "project_id": "school-app-backend-38e01",
+    "storage_bucket": "school-app-backend-38e01.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:601113409800:android:a85f2a88dc05a4a54d14bd",
+        "android_client_info": {
+          "package_name": "com.munaz.academex"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHLb13wElglyp3vCBj7UlU3OrqEMJRboE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
