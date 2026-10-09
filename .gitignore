@@ -49,3 +49,5 @@ app.*.map.json
 
 # Local Android/Flutter machine settings
 android/app/local.properties
+# Node.js / Firebase Cloud Functions
+functions/node_modules/

@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Academx SIS</title>
+
+    <!-- Academx SIS Styles -->
+    <link rel="stylesheet" href="./style.css">
+
+</head>
+
+
+<body>
+
+
+<!-- =====================================================
+     LOGIN SCREEN
+====================================================== -->
+
+<div
+        class="login-screen"
+        id="loginScreen"
+>
+
+    <div class="login-card">
+
+        <div class="brand">
+            Academx
+        </div>
+
+        <div class="login-subtitle">
+            Sign in to Academx SIS
+        </div>
+
+
+        <!-- Email -->
+
+        <label
+                class="field-label"
+                for="email"
+        >
+            Email
+        </label>
+
+        <input
+                type="email"
+                id="email"
+                class="input"
+                placeholder="Enter your email"
+                autocomplete="email"
+        >
+
+
+        <!-- Password -->
+
+        <label
+                class="field-label"
+                for="password"
+        >
+            Password
+        </label>
+
+        <input
+                type="password"
+                id="password"
+                class="input"
+                placeholder="Enter your password"
+                autocomplete="current-password"
+        >
+
+
+        <!-- Forgot Password -->
+
+        <a
+                href="#"
+                class="forgot"
+                id="forgotPassword"
+        >
+            Forgot password?
+        </a>
+
+
+        <!-- Login Button -->
+
+        <button
+                type="button"
+                class="login-button"
+                id="loginButton"
+        >
+            Login
+        </button>
+
+    </div>
+
+</div>
+
+
+
+<!-- =====================================================
+     ACADEMX SIS
+====================================================== -->
+
+<div
+        class="sis-container hidden"
+        id="sisScreen"
+>
+
+
+    <!-- =================================================
+         SIDEBAR
+    ================================================== -->
+
+    <aside class="sidebar">
+
+        <div>
+
+            <!-- Academx Logo / Name -->
+
+            <div class="sidebar-logo">
+                Academx
+            </div>
+
+
+            <!-- Home -->
+
+            <div
+                    class="nav-item active"
+                    id="homeNav"
+                    onclick="showPage('home', this)"
+            >
+                Home
+            </div>
+
+
+            <!-- Applications -->
+
+            <div
+                    class="nav-group"
+                    id="applicationsGroup"
+            >
+
+                <div
+                        class="nav-item"
+                        id="applicationsNav"
+                        onclick="showPage('applications', this)"
+                >
+                    Applications
+                </div>
+
+                <!-- Sub-navigation (shown while Applications is open; handled in app.js) -->
+                <div class="nav-children">
+
+                    <div class="nav-subitem" data-axnav="forms">
+                        Forms
+                    </div>
+
+                    <div class="nav-subitem" data-axnav="apps">
+                        Applications
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Academic Records -->
+
+            <div
+                    class="nav-item"
+                    id="academicRecordsNav"
+                    onclick="showPage('academicRecords', this)"
+            >
+                Academic Records
+            </div>
+
+
+            <!-- Security -->
+
+            <div
+                    class="nav-item"
+                    id="securityNav"
+                    onclick="showPage('security', this)"
+            >
+                Security
+            </div>
+
+        </div>
+
+
+        <!-- Logout -->
+
+        <div
+                class="logout"
+                id="logoutButton"
+        >
+            Logout
+        </div>
+
+    </aside>
+
+
+
+    <!-- =================================================
+         MAIN CONTENT
+    ================================================== -->
+
+    <main class="content">
+
+
+        <!-- Top Bar -->
+
+        <header class="topbar">
+
+            <h2 id="pageTitle">
+                Home
+            </h2>
+
+        </header>
+
+
+
+        <!-- =================================================
+             PAGE CONTENT
+        ================================================== -->
+
+        <section class="page">
+
+
+            <!-- =================================================
+                 HOME
+            ================================================== -->
+
+            <div
+                    id="homePage"
+                    class="page-card"
+            >
+
+                <h1>
+                    Welcome to Academx SIS
+                </h1>
+
+                <p>
+                    Manage your institution, applications,
+                    academic records and security from one place.
+                </p>
+
+            </div>
+
+
+
+            <!-- =================================================
+                 APPLICATIONS
+            ================================================== -->
+
+            <div
+                    id="applicationsPage"
+                    class="page-card hidden"
+            >
+
+                <!-- Applications module renders here (see app.js) -->
+                <div
+                        id="applicationsRoot"
+                        class="ax-root ax-root-top"
+                ></div>
+
+            </div>
+
+
+
+            <!-- =================================================
+                 ACADEMIC RECORDS
+            ================================================== -->
+
+            <div
+                    id="academicRecordsPage"
+                    class="page-card hidden"
+            >
+
+                <h1>
+                    Academic Records
+                </h1>
+
+                <p>
+                    Manage student academic records,
+                    marks, grades, semesters and reports.
+                </p>
+
+            </div>
+
+
+
+            <!-- =================================================
+                 SECURITY
+            ================================================== -->
+
+            <div
+                    id="securityPage"
+                    class="page-card hidden"
+            >
+
+                <h1>
+                    Security
+                </h1>
+
+                <p>
+                    Manage user access, roles, account security
+                    and institution-level permissions.
+                </p>
+
+            </div>
+
+
+        </section>
+
+    </main>
+
+</div>
+
+
+
+<!-- =====================================================
+     ACADEMX SIS JAVASCRIPT
+====================================================== -->
+
+<script
+        type="module"
+        src="./app.js"
+></script>
+
+
+</body>
+
+</html>
