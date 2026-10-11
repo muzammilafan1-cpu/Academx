@@ -340,38 +340,60 @@ app.post("/api/students/activate", async (req, res) => {
 
     const pending = pendingSnap.data();
     let userRecord;
+    let createdNow = false;
 
     try {
       userRecord = await auth.getUserByEmail(email);
     } catch (error) {
-      if (error.code !== "auth/user-not-found") throw error;
-
-      try {
-        userRecord = await auth.createUser({
-          email,
-          displayName: pending.name,
-          emailVerified: false,
-        });
-      } catch (createError) {
-        if (createError.code !== "auth/email-already-exists") throw createError;
-        userRecord = await auth.getUserByEmail(email);
+      if (error.code !== "auth/user-not-found") {
+        throw error;
       }
+
+      userRecord = await auth.createUser({
+        email,
+        displayName: pending.name,
+        emailVerified: false,
+      });
+
+      createdNow = true;
     }
 
     const uid = userRecord.uid;
     const userRef = db.doc(`users/${uid}`);
-    const instUserRef = db.doc(`institutions/${institutionId}/users/${uid}`);
+    const instUserRef = db.doc(
+      `institutions/${institutionId}/users/${uid}`
+    );
 
     const userSnap = await userRef.get();
     const instUserSnap = await instUserRef.get();
 
-    if (userSnap.exists) {
+    if (!createdNow) {
+      if (!userSnap.exists) {
+        return res.json({ ok: true, proceed: true });
+      }
+
       const existing = userSnap.data();
+
       if (
         existing.institutionId !== institutionId ||
-        existing.role !== "student"
+        existing.role !== "student" ||
+        (existing.applicationId &&
+          existing.applicationId !== applicationId)
       ) {
         return res.json({ ok: true, proceed: true });
+      }
+
+      if (instUserSnap.exists) {
+        const institutionUser = instUserSnap.data();
+
+        if (
+          institutionUser.institutionId !== institutionId ||
+          institutionUser.role !== "student" ||
+          (institutionUser.applicationId &&
+            institutionUser.applicationId !== applicationId)
+        ) {
+          return res.json({ ok: true, proceed: true });
+        }
       }
     }
 
