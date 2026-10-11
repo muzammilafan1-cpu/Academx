@@ -30,6 +30,9 @@ const db = admin.firestore();
 const auth = admin.auth();
 const FieldValue = admin.firestore.FieldValue;
 
+const { createApproveRouter } = require("./approve-application");
+app.use("/api", createApproveRouter(admin));
+
 const allowedOrigins = [
   "https://academx.in",
   "https://www.academx.in",
