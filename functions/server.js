@@ -33,6 +33,9 @@ const FieldValue = admin.firestore.FieldValue;
 const { createApproveRouter } = require("./approve-application");
 app.use("/api", createApproveRouter(admin));
 
+const { createSisRouter } = require("./sis-routes");
+app.use("/api", createSisRouter(admin));
+
 const allowedOrigins = [
   "https://academx.in",
   "https://www.academx.in",
