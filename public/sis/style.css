@@ -1141,3 +1141,61 @@ body.ax-noscroll {
         padding-right: 18px;
     }
 }
+
+
+/* =========================================================
+   HOME DASHBOARD
+========================================================= */
+
+.ax-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+    margin: 22px 0 18px;
+}
+
+.ax-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: left;
+    font: inherit;
+    padding: 18px;
+    border: 1px solid #e7ebf2;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #172033;
+}
+
+button.ax-stat {
+    cursor: pointer;
+}
+
+button.ax-stat:hover {
+    border-color: #1565c0;
+}
+
+.ax-stat-value {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+}
+
+.ax-stat-label {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ax-stat-hint {
+    font-size: 12.5px;
+    color: #687386;
+    min-height: 16px;
+}
+
+.ax-attention {
+    margin: 0;
+    padding-left: 18px;
+    line-height: 1.8;
+    font-size: 14px;
+}

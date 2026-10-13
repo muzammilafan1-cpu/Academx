@@ -142,6 +142,30 @@
 
             <!-- Applications -->
 
+            <!-- Students -->
+
+            <div
+                    class="nav-item"
+                    id="studentsNav"
+                    onclick="showPage('students', this)"
+            >
+                Students
+            </div>
+
+
+            <!-- Classes -->
+
+            <div
+                    class="nav-item"
+                    id="classesNav"
+                    onclick="showPage('classes', this)"
+            >
+                Classes
+            </div>
+
+
+            <!-- Applications (with sub-navigation) -->
+
             <div
                     class="nav-group"
                     id="applicationsGroup"
@@ -251,6 +275,48 @@
                     Manage your institution, applications,
                     academic records and security from one place.
                 </p>
+
+                <!-- Dashboard renders here (see people.js) -->
+                <div
+                        id="homeRoot"
+                        class="ax-root"
+                ></div>
+
+            </div>
+
+
+
+            <!-- =================================================
+                 STUDENTS
+            ================================================== -->
+
+            <div
+                    id="studentsPage"
+                    class="page-card hidden"
+            >
+
+                <div
+                        id="studentsRoot"
+                        class="ax-root ax-root-top"
+                ></div>
+
+            </div>
+
+
+
+            <!-- =================================================
+                 CLASSES
+            ================================================== -->
+
+            <div
+                    id="classesPage"
+                    class="page-card hidden"
+            >
+
+                <div
+                        id="classesRoot"
+                        class="ax-root ax-root-top"
+                ></div>
 
             </div>
 

@@ -1,5 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 
+import { initPeople } from "./people.js";
+
 import {
     getAuth,
     signInWithEmailAndPassword,
@@ -18,11 +20,6 @@ import {
     deleteDoc,
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
-
-import {
-    getFunctions,
-    httpsCallable
-} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js";
 
 
 // ============================================================
@@ -50,9 +47,17 @@ const auth = getAuth(app);
 
 const db = getFirestore(app);
 
-// Cloud Functions (same region as the Firestore database).
-// Student creation happens there, never in the browser.
-const functionsClient = getFunctions(app, "asia-south1");
+// Academx API (Render). Student creation happens there, never in the browser.
+const AX_API_BASE = "https://academx-gm8i.onrender.com";
+
+
+// Home dashboard, Students and Classes live in people.js
+const people = initPeople({
+    db: db,
+    auth: auth,
+    apiBase: AX_API_BASE,
+    toast: function (text, type) { axToast(text, type); }
+});
 
 
 // ============================================================
@@ -424,6 +429,8 @@ function showPage(
 
     const pages = [
         "home",
+        "students",
+        "classes",
         "applications",
         "academicRecords",
         "security"
@@ -518,6 +525,10 @@ function showPage(
 
         home: "Home",
 
+        students: "Students",
+
+        classes: "Classes",
+
         applications: "Applications",
 
         academicRecords:
@@ -564,6 +575,12 @@ function showPage(
 
         openApplications({ refresh: true });
     }
+
+    if (page === "home") people.openHome();
+
+    if (page === "students") people.openStudents();
+
+    if (page === "classes") people.openClasses();
 }
 
 
@@ -643,6 +660,8 @@ function axFreshState() {
 
         forms: [],
         applications: [],
+        classOptions: [],         // from the Classes list
+        sectionOptions: [],
         draft: null,
         modal: null,              // { type: "app" | "form", id }
         msg: null
@@ -664,11 +683,15 @@ function setApplicationsContext(uid, userData) {
     AX.role = userData.role;
     AX.institutionId = userData.institutionId;
     AX.canManage = userData.role === "admin";
+
+    people.setContext(uid, userData);
 }
 
 function resetApplications() {
 
     AX = axFreshState();
+
+    people.reset();
 
     if (appsRoot) {
         appsRoot.innerHTML = "";
@@ -740,15 +763,48 @@ function axNewField(label = "", type = "text", required = false, options = []) {
     };
 }
 
+// Class and Section start with the values from your Classes list,
+// so applications match the classes used by attendance and timetables.
 function axStarterFields() {
 
     return [
         axNewField("Student Name", "text", true),
         axNewField("Email", "email", true),
         axNewField("Contact Number", "phone", true),
-        axNewField("Class", "select", true, ["Class 1", "Class 2", "Class 3"]),
-        axNewField("Section", "select", true, ["A", "B", "C"])
+        axNewField("Class", "select", true,
+            AX.classOptions.length ? AX.classOptions : ["Class 1", "Class 2", "Class 3"]),
+        axNewField("Section", "select", true,
+            AX.sectionOptions.length ? AX.sectionOptions : ["A", "B", "C"])
     ];
+}
+
+async function axLoadClassOptions() {
+
+    try {
+
+        const classes = await people.loadClasses(true);
+
+        const sections = new Set();
+
+        classes.forEach(function (c) {
+            c.sections.forEach(function (x) { sections.add(x); });
+        });
+
+        const numeric = function (a, b) {
+            return String(a).localeCompare(String(b), undefined, { numeric: true });
+        };
+
+        AX.classOptions = classes.map(function (c) { return c.class; }).filter(Boolean).sort(numeric);
+        AX.sectionOptions = Array.from(sections).sort(numeric);
+
+    } catch (error) {
+
+        // Not fatal: the form builder falls back to default options
+        console.warn("Couldn't load classes for the form builder:", error);
+
+        AX.classOptions = [];
+        AX.sectionOptions = [];
+    }
 }
 
 function axBlankDraft() {
@@ -1337,11 +1393,7 @@ async function axUpdateApplicationStatus(appId, newStatus) {
 
             // Approval is done by a Cloud Function: it validates the application,
             // records the student, and cannot create duplicates.
-            await httpsCallable(functionsClient, "approveApplication")({
-                institutionId: AX.institutionId,
-                applicationId: appId,
-                reviewNote: note
-            });
+            await axCallApprove(appId, note);
 
         } else {
 
@@ -1378,7 +1430,80 @@ async function axUpdateApplicationStatus(appId, newStatus) {
     axRender();
 }
 
-// Turns Firestore / Cloud Functions errors into a message for staff.
+// Calls the Academx API to approve an application / create its student record.
+// Sends the signed-in user's Firebase ID token, so the server can check who is asking.
+async function axCallApprove(appId, note) {
+
+    const user = auth.currentUser;
+
+    if (!user) {
+
+        const err = new Error("Please sign in again.");
+        err.code = "api/unauthenticated";
+        throw err;
+    }
+
+    const token = await user.getIdToken();
+
+    // The first request after a quiet period can take a while to wake the server
+    axToast("Contacting the student service. This can take up to a minute the first time.", "ok");
+
+    const controller = new AbortController();
+
+    const timer = setTimeout(function () { controller.abort(); }, 90000);
+
+    let response;
+
+    try {
+
+        response = await fetch(AX_API_BASE + "/api/approve-application", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token
+            },
+            body: JSON.stringify({
+                institutionId: AX.institutionId,
+                applicationId: appId,
+                reviewNote: note || ""
+            }),
+            signal: controller.signal
+        });
+
+    } catch (error) {
+
+        console.error("Academx API request failed:", error);
+
+        const err = new Error("unreachable");
+        err.code = "api/unreachable";
+        throw err;
+
+    } finally {
+
+        clearTimeout(timer);
+    }
+
+    let data = null;
+
+    try {
+        data = await response.json();
+    } catch (error) {
+        data = null;
+    }
+
+    if (!response.ok || !data || data.ok !== true) {
+
+        console.error("Academx API error:", response.status, data);
+
+        const err = new Error((data && data.message) || "Request failed");
+        err.code = "api/" + ((data && data.code) || ("http-" + response.status));
+        throw err;
+    }
+
+    return data;
+}
+
+// Turns API / Firestore errors into a message for staff.
 function axErrorText(error, fallbackPrefix) {
 
     const code = error.code || "";
@@ -1387,16 +1512,20 @@ function axErrorText(error, fallbackPrefix) {
         return "Firestore rules blocked this change. Update the applications rules.";
     }
 
-    // Firebase answers a plain "NOT_FOUND" when the function itself isn't deployed
-    if (code === "functions/unavailable" ||
-        (code === "functions/not-found" && error.message === "NOT_FOUND")) {
-        return "The approval service isn't available yet. Make sure the Cloud Functions are deployed.";
+    if (code === "api/unreachable") {
+        return "The student service did not respond, so nothing was confirmed. " +
+            "Try again in a minute. If it keeps happening, tell your Academx administrator " +
+            "(technical detail is in the browser console).";
     }
 
-    // Messages written by our own functions are safe and meant to be shown
-    if (["functions/failed-precondition", "functions/invalid-argument",
-         "functions/permission-denied", "functions/not-found"].includes(code)) {
+    // Messages written by our own API are safe and meant to be shown
+    if (["api/failed-precondition", "api/invalid-argument", "api/permission-denied",
+         "api/not-found", "api/unauthenticated"].includes(code)) {
         return error.message;
+    }
+
+    if (code.indexOf("api/") === 0) {
+        return "The student service had a problem. Please try again.";
     }
 
     return fallbackPrefix + error.message;
@@ -1414,10 +1543,7 @@ async function axCreateStudentRecord(appId) {
 
     try {
 
-        await httpsCallable(functionsClient, "approveApplication")({
-            institutionId: AX.institutionId,
-            applicationId: appId
-        });
+        await axCallApprove(appId, "");
 
         const ref = doc(db, axBase() + "/applications", appId);
 
@@ -1466,7 +1592,7 @@ async function openApplications(options) {
 
     try {
 
-        await Promise.all([axLoadForms(), axLoadApplications()]);
+        await Promise.all([axLoadForms(), axLoadApplications(), axLoadClassOptions()]);
 
         AX.loaded = true;
 
