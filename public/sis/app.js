@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 
 import { initPeople } from "./people.js";
+import { initAttendance } from "./attendance.js";
 
 import {
     getAuth,
@@ -59,6 +60,7 @@ const people = initPeople({
     toast: function (text, type) { axToast(text, type); }
 });
 
+const attendance = initAttendance({ db: db });
 
 // ============================================================
 // HTML ELEMENTS
@@ -431,6 +433,7 @@ function showPage(
         "home",
         "students",
         "classes",
+        "attendance",
         "applications",
         "academicRecords",
         "security"
@@ -529,6 +532,8 @@ function showPage(
 
         classes: "Classes",
 
+        attendance: "Attendance",
+
         applications: "Applications",
 
         academicRecords:
@@ -581,6 +586,8 @@ function showPage(
     if (page === "students") people.openStudents();
 
     if (page === "classes") people.openClasses();
+
+    if (page === "attendance") attendance.open();
 }
 
 
@@ -685,6 +692,7 @@ function setApplicationsContext(uid, userData) {
     AX.canManage = userData.role === "admin";
 
     people.setContext(uid, userData);
+    attendance.setContext(userData.institutionId);
 }
 
 function resetApplications() {
@@ -692,6 +700,7 @@ function resetApplications() {
     AX = axFreshState();
 
     people.reset();
+    attendance.reset();
 
     if (appsRoot) {
         appsRoot.innerHTML = "";
@@ -765,16 +774,47 @@ function axNewField(label = "", type = "text", required = false, options = []) {
 
 // Class and Section start with the values from your Classes list,
 // so applications match the classes used by attendance and timetables.
+// A Class or Section field takes its choices from the Classes list, not typed by hand
+function axSourceOf(f) {
+
+    if (f.type !== "select" && f.type !== "radio") return null;
+
+    if (/^class\b/i.test(String(f.label || ""))) return "class";
+
+    if (/^section\b/i.test(String(f.label || ""))) return "section";
+
+    return null;
+}
+
+function axSourceOptions(source) {
+
+    return source === "class" ? AX.classOptions : AX.sectionOptions;
+}
+
+function axSourceNote(source) {
+
+    const list = axSourceOptions(source);
+
+    const noun = source === "class" ? "class" : "section";
+
+    if (!list.length) {
+
+        return "<p class=\"ax-info\">No " + noun + "s are set up yet. Go to <strong>Classes</strong> in the menu, " +
+            "add them, then come back to this form.</p>";
+    }
+
+    return "<p class=\"ax-muted ax-opts\">Choices come from your Classes list (" + list.length + " " + noun +
+        (list.length === 1 ? "" : "s") + "). To change them, edit Classes in the menu.</p>";
+}
+
 function axStarterFields() {
 
     return [
         axNewField("Student Name", "text", true),
         axNewField("Email", "email", true),
         axNewField("Contact Number", "phone", true),
-        axNewField("Class", "select", true,
-            AX.classOptions.length ? AX.classOptions : ["Class 1", "Class 2", "Class 3"]),
-        axNewField("Section", "select", true,
-            AX.sectionOptions.length ? AX.sectionOptions : ["A", "B", "C"])
+        axNewField("Class", "select", true),
+        axNewField("Section", "select", true)
     ];
 }
 
@@ -1109,10 +1149,22 @@ function axValidate(d) {
 
         seen.add(id);
 
-        if (
-            AX_OPTIONS_REQUIRED.includes(f.type) &&
-            axParseOptions(f.optionsText).length < 2
-        ) {
+                const source = axSourceOf(f);
+
+                if (source) {
+
+                    if (!axSourceOptions(source).length) {
+                        return "Your \"" + f.label + "\" field takes its choices from Classes, and none are set up yet. " +
+                            "Go to Classes in the menu, create your classes and sections, then come back to this form.";
+                    }
+
+                    continue;
+                }
+
+                if (
+                    AX_OPTIONS_REQUIRED.includes(f.type) &&
+                    axParseOptions(f.optionsText).length < 2
+                ) {
             return "\"" + f.label + "\" needs at least two options.";
         }
     }
@@ -1131,9 +1183,15 @@ function axBuildFields(d) {
             required: !!f.required
         };
 
-        if (AX_OPTION_TYPES.includes(f.type)) {
+                const source = axSourceOf(f);
 
-            const options = axParseOptions(f.optionsText);
+                if (source) {
+
+                    out.options = axSourceOptions(source).slice();
+
+                } else if (AX_OPTION_TYPES.includes(f.type)) {
+
+                    const options = axParseOptions(f.optionsText);
 
             if (options.length) {
                 out.options = options;
@@ -1147,6 +1205,9 @@ function axBuildFields(d) {
 async function axSaveForm(status) {
 
     const d = AX.draft;
+
+    // Always check against the current Classes list when saving
+    await axLoadClassOptions();
 
     const error = axValidate(d);
 
@@ -1808,7 +1869,11 @@ function axRenderBuilder() {
                 t.label + "</option>";
         }).join("");
 
-        const options = AX_OPTION_TYPES.includes(f.type)
+                const source = axSourceOf(f);
+
+                const options = source
+                    ? axSourceNote(source)
+                    : AX_OPTION_TYPES.includes(f.type)
             ? "<label class=\"ax-opts\"><span>" +
               (f.type === "checkbox"
                   ? "Choices (optional, one per line; leave empty for a single checkbox)"
@@ -2185,11 +2250,12 @@ function axAction(act, target) {
             AX.formsMode = "list";
             return axRender();
 
-        case "mode-create":
-            if (!AX.canManage) return;
-            if (!AX.draft || !AX.draft.isNew) AX.draft = axBlankDraft();
-            AX.formsMode = "create";
-            return axRender();
+                case "mode-create":
+                    if (!AX.canManage) return;
+                    if (!AX.draft || !AX.draft.isNew) AX.draft = axBlankDraft();
+                    AX.formsMode = "create";
+                    axLoadClassOptions().then(axRender);
+                    return axRender();
 
         case "forms-filter":
             AX.formsFilter = target.dataset.s;
