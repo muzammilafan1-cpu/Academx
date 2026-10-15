@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 
 import { initPeople } from "./people.js";
 import { initAttendance } from "./attendance.js";
+import { initAcademic } from "./academic.js";
 
 import {
     getAuth,
@@ -61,6 +62,12 @@ const people = initPeople({
 });
 
 const attendance = initAttendance({ db: db });
+const academic = initAcademic({
+    db: db,
+    auth: auth,
+    apiBase: AX_API_BASE,
+    toast: function (text, type) { axToast(text, type); }
+});
 
 // ============================================================
 // HTML ELEMENTS
@@ -588,6 +595,7 @@ function showPage(
     if (page === "classes") people.openClasses();
 
     if (page === "attendance") attendance.open();
+    if (page === "academicRecords") academic.open();
 }
 
 
@@ -693,6 +701,7 @@ function setApplicationsContext(uid, userData) {
 
     people.setContext(uid, userData);
     attendance.setContext(userData.institutionId);
+    academic.setContext(userData.institutionId, userData.role);
 }
 
 function resetApplications() {
@@ -701,6 +710,7 @@ function resetApplications() {
 
     people.reset();
     attendance.reset();
+    academic.reset();
 
     if (appsRoot) {
         appsRoot.innerHTML = "";
