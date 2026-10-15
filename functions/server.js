@@ -36,6 +36,9 @@ app.use("/api", createApproveRouter(admin));
 const { createSisRouter } = require("./sis-routes");
 app.use("/api", createSisRouter(admin));
 
+const { createAcademicRouter } = require("./academic-routes");
+app.use("/api", createAcademicRouter(admin));
+
 const allowedOrigins = [
   "https://academx.in",
   "https://www.academx.in",
