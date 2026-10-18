@@ -833,7 +833,7 @@ const AX_CORE_FIELDS = [
 
 // Forms created before form types existed are onboarding forms
 function axFormTypeOf(form) {
-    return form && form.formType === "enquiry" ? "enquiry" : "onboarding";
+    return form && (form.formType === "custom" || form.formType === "enquiry") ? "custom" : "onboarding";
 }
 
 function axLockedField(core) {
@@ -847,7 +847,7 @@ function axLockedField(core) {
 
 function axStarterFields(formType) {
 
-    return formType === "enquiry" ? [] : AX_CORE_FIELDS.map(function (c) { return axLockedField(c); });
+    return formType === "custom" ? [] : AX_CORE_FIELDS.map(function (c) { return axLockedField(c); });
 }
 
 async function axLoadClassOptions() {
@@ -881,7 +881,7 @@ async function axLoadClassOptions() {
 
 function axBlankDraft(formType) {
 
-    const type = formType === "enquiry" ? "enquiry" : "onboarding";
+    const type = formType === "custom" ? "custom" : "onboarding";
 
     return {
         formId: null,
@@ -1164,10 +1164,10 @@ function axValidate(d) {
     if (!d.academicYear) return "Select an academic year.";
 
     if (!d.fields.length) {
-        return d.formType === "enquiry" ? "Add at least one question." : "Add at least one field.";
+        return d.formType === "custom" ? "Add at least one question." : "Add at least one field.";
     }
 
-    if (d.formType !== "enquiry") {
+    if (d.formType !== "custom") {
 
         const have = d.fields.map(function (f) { return axSlug(f.label); });
 
@@ -1271,7 +1271,7 @@ async function axSaveForm(status) {
         name: d.name.trim(),
         description: d.description.trim(),
         academicYear: d.academicYear,
-        formType: d.formType === "enquiry" ? "enquiry" : "onboarding",
+        formType: d.formType === "custom" ? "custom" : "onboarding",
         status: status,
         fields: axBuildFields(d),
         updatedAt: serverTimestamp()
@@ -1924,7 +1924,7 @@ function axFormsRow(f) {
 
         actions.push("<button type=\"button\" class=\"ax-btn ax-sm\" data-act=\"copy\" data-id=\"" + id + "\">Copy link</button>");
 
-        if (type === "enquiry") {
+        if (type === "custom") {
             actions.push("<button type=\"button\" class=\"ax-btn ax-sm\" data-act=\"copy-embed\" data-id=\"" + id + "\">Copy embed code</button>");
         }
 
@@ -1943,7 +1943,7 @@ function axFormsRow(f) {
 
     return "<tr>" +
         "<td><strong>" + axEsc(f.name || "Untitled form") + "</strong>" +
-        "<div class=\"ax-muted\">" + (type === "enquiry" ? "Custom form" : "Onboarding form") + "</div>" +
+        "<div class=\"ax-muted\">" + (type === "custom" ? "Custom form" : "Onboarding form") + "</div>" +
         (f.description ? "<div class=\"ax-muted\">" + axEsc(f.description) + "</div>" : "") + "</td>" +
         "<td>" + axEsc(f.academicYear || "—") + "</td>" +
         "<td>" + axBadge(f.status) + "</td>" +
@@ -1968,7 +1968,7 @@ function axRenderBuilder() {
     const typeCards = [
         ["onboarding", "Onboarding form",
             "For admissions. Applications are reviewed and approved here, and approval creates the student's Academx record."],
-        ["enquiry", "Custom form",
+        ["custom", "Custom form",
             "For any purpose: admissions, enquiries, hiring, feedback or surveys. Nothing is approved; responses appear under Custom forms."]
     ].map(function (t) {
 
@@ -1984,7 +1984,7 @@ function axRenderBuilder() {
         ? "<p class=\"ax-muted\">Switching type resets the fields below.</p>"
         : "<p class=\"ax-muted\">The form type can't be changed after a form is created.</p>";
 
-    const fieldsNote = d.formType === "enquiry"
+    const fieldsNote = d.formType === "custom"
         ? "<p class=\"ax-muted\">Add the questions you need. Nothing is required by default.</p>"
         : "<p class=\"ax-muted\">These five fields are required on every onboarding form. They can't be removed, renamed or made optional. Add any other fields below them.</p>";
 
@@ -2104,8 +2104,13 @@ function axRenderApplicationsView() {
     const formOptions = "<option value=\"all\">All forms</option>" +
         onboardingForms.map(function (f) {
             return "<option value=\"" + axEsc(f.id) + "\"" + (AX.appForm === f.id ? " selected" : "") + ">" +
-                axEsc((f.name || f.id) + (f.academicYear ? " (" + f.academicYear + ")" : "")) + "</option>";
-        }).join("");
+                axEsc((f.name || f.id) +
+                    (f.academicYear ? " · " + f.academicYear : "") +
+                    (f.status ? " · " + f.status : "")) + "</option>";
+        }).join("") +
+        (onboardingForms.length
+            ? ""
+            : "<option disabled>No onboarding forms yet. Create one under Forms.</option>");
 
     return axPageHeader(
             "Applications",
@@ -2313,7 +2318,7 @@ document.body.appendChild(axModalHost);
 async function axLoadEnquiries() {
 
     const snap = await getDocs(
-        collection(db, axBase() + "/enquiries")
+        collection(db, axBase() + "/customResponses")
     );
 
     AX.enquiries = snap.docs
@@ -2715,7 +2720,7 @@ appsRoot.addEventListener("change", function (event) {
 
     if (el.dataset.ft === undefined || !AX.draft || !AX.draft.isNew) return;
 
-    AX.draft.formType = el.dataset.ft === "enquiry" ? "enquiry" : "onboarding";
+    AX.draft.formType = el.dataset.ft === "custom" ? "custom" : "onboarding";
     AX.draft.fields = axStarterFields(AX.draft.formType);
 
     axRender();
