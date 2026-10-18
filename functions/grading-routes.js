@@ -93,7 +93,11 @@ function validateGradingPayload(p) {
 
     if (!ROUNDING_MODES.includes(mode)) bad("Choose a rounding rule.");
 
-    const rounding = { mode: mode };
+    const decimals = whole(p.rounding && p.rounding.decimals, 0, 2);
+
+    if (decimals === null) bad("Decimal places must be 0, 1 or 2.");
+
+    const rounding = { mode: mode, decimals: decimals };
 
     // Grade bands (grade points and custom letters only)
     let bands = [];

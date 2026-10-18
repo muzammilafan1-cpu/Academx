@@ -71,7 +71,7 @@ const DEFAULTS = {
                 { name: "Third Division", min: 33 }
             ]
         },
-        rounding: { mode: "nearest" }
+        rounding: { mode: "nearest", decimals: 0 }
     },
     grade_points: {
         components: STANDARD_COMPONENTS,
@@ -88,7 +88,7 @@ const DEFAULTS = {
         ],
         passRule: { minPercent: 33, allMustPass: true },
         divisions: { enabled: false, cutoffs: [] },
-        rounding: { mode: "nearest" }
+        rounding: { mode: "nearest", decimals: 1 }
     },
     letter_custom: {
         components: STANDARD_COMPONENTS,
@@ -101,14 +101,14 @@ const DEFAULTS = {
         ],
         passRule: { minPercent: 33, allMustPass: true },
         divisions: { enabled: false, cutoffs: [] },
-        rounding: { mode: "nearest" }
+        rounding: { mode: "nearest", decimals: 0 }
     },
     pass_fail: {
         components: STANDARD_COMPONENTS,
         bands: [],
         passRule: { minPercent: 33, allMustPass: true },
         divisions: { enabled: false, cutoffs: [] },
-        rounding: { mode: "nearest" }
+        rounding: { mode: "nearest", decimals: 0 }
     }
 };
 
@@ -552,6 +552,11 @@ export function initGrading(env) {
             options.map(function (o) {
                 return "<option value=\"" + o[0] + "\"" + (f.rounding.mode === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
             }).join("") + "</select></label>" +
+            "<label><span>Decimal places</span><select data-gd=\"rdec\"" + dis() + ">" +
+            [["0", "Whole number (8)"], ["1", "One decimal (8.5)"], ["2", "Two decimals (8.46)"]].map(function (o) {
+                return "<option value=\"" + o[0] + "\"" + (String(f.rounding.decimals || 0) === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
+            }).join("") + "</select></label>" +
+            "<p class=\"ax-muted\">Decimal places apply to the final result. Grade point averages (CGPA) are usually shown with one decimal place.</p>" +
             saveBar("rounding", "Save rounding") + "</section>";
     }
 
@@ -609,7 +614,7 @@ export function initGrading(env) {
                     })
                 }
                 : { enabled: false, cutoffs: [] },
-            rounding: { mode: p.rounding.mode }
+            rounding: { mode: p.rounding.mode, decimals: Number(p.rounding.decimals) || 0 }
         };
     }
 
@@ -699,6 +704,7 @@ export function initGrading(env) {
             }
         }
         else if (kind === "round") f.rounding.mode = el.value;
+        else if (kind === "rdec") f.rounding.decimals = Number(el.value);
     }
 
 
@@ -759,7 +765,7 @@ export function initGrading(env) {
 
             const el = event.target;
 
-            if (!S.canManage || !el.dataset.gd || el.dataset.gd === "type" || el.dataset.gd === "round") return;
+            if (!S.canManage || !el.dataset.gd || el.dataset.gd === "type" || el.dataset.gd === "round" || el.dataset.gd === "rdec") return;
 
             setField(el);
         });
