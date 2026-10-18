@@ -62,12 +62,14 @@ const people = initPeople({
 });
 
 const attendance = initAttendance({ db: db });
+
 const academic = initAcademic({
     db: db,
     auth: auth,
     apiBase: AX_API_BASE,
     toast: function (text, type) { axToast(text, type); }
 });
+
 
 // ============================================================
 // HTML ELEMENTS
@@ -595,6 +597,7 @@ function showPage(
     if (page === "classes") people.openClasses();
 
     if (page === "attendance") attendance.open();
+
     if (page === "academicRecords") academic.open();
 }
 
@@ -664,7 +667,7 @@ function axFreshState() {
         canManage: false,
         loaded: false,
 
-        view: "forms",            // "forms" | "applications"
+        view: "forms",            // "forms" | "applications" | "enquiries"
         formsMode: "list",        // "list" | "create"
         formsFilter: "all",       // all | active | draft | closed
 
@@ -675,10 +678,11 @@ function axFreshState() {
 
         forms: [],
         applications: [],
-        classOptions: [],         // from the Classes list
+        enquiries: [],
+        classOptions: [],
         sectionOptions: [],
         draft: null,
-        modal: null,              // { type: "app" | "form", id }
+        modal: null,              // { type: "app" | "form" | "enquiry", id }
         msg: null
     };
 }
@@ -817,15 +821,33 @@ function axSourceNote(source) {
         (list.length === 1 ? "" : "s") + "). To change them, edit Classes in the menu.</p>";
 }
 
-function axStarterFields() {
+// Fields every onboarding form has. They are always present, always required,
+// and can't be renamed, retyped or deleted. Other fields are added after them.
+const AX_CORE_FIELDS = [
+    { label: "Student Name",   type: "text"   },
+    { label: "Email",          type: "email"  },
+    { label: "Contact Number", type: "phone"  },
+    { label: "Class",          type: "select" },
+    { label: "Section",        type: "select" }
+];
 
-    return [
-        axNewField("Student Name", "text", true),
-        axNewField("Email", "email", true),
-        axNewField("Contact Number", "phone", true),
-        axNewField("Class", "select", true),
-        axNewField("Section", "select", true)
-    ];
+// Forms created before form types existed are onboarding forms
+function axFormTypeOf(form) {
+    return form && form.formType === "enquiry" ? "enquiry" : "onboarding";
+}
+
+function axLockedField(core) {
+
+    const f = axNewField(core.label, core.type, true);
+
+    f.locked = true;
+
+    return f;
+}
+
+function axStarterFields(formType) {
+
+    return formType === "enquiry" ? [] : AX_CORE_FIELDS.map(function (c) { return axLockedField(c); });
 }
 
 async function axLoadClassOptions() {
@@ -857,16 +879,19 @@ async function axLoadClassOptions() {
     }
 }
 
-function axBlankDraft() {
+function axBlankDraft(formType) {
+
+    const type = formType === "enquiry" ? "enquiry" : "onboarding";
 
     return {
         formId: null,
         isNew: true,
         keepStatus: null,
+        formType: type,
         name: "",
         description: "",
         academicYear: axDefaultYear(),
-        fields: axStarterFields()
+        fields: axStarterFields(type)
     };
 }
 
@@ -929,9 +954,11 @@ function axAppById(id) {
     return AX.applications.find(function (a) { return a.id === id; });
 }
 
+// Responses to a form, from either kind of form
 function axAppCount(formId) {
 
-    return AX.applications.filter(function (a) { return a.formId === formId; }).length;
+    return AX.applications.filter(function (a) { return a.formId === formId; }).length +
+        AX.enquiries.filter(function (e) { return e.formId === formId; }).length;
 }
 
 function axStatusOf(app) {
@@ -1135,7 +1162,24 @@ function axValidate(d) {
 
     if (!d.name.trim()) return "Enter a form name.";
     if (!d.academicYear) return "Select an academic year.";
-    if (!d.fields.length) return "Add at least one field.";
+
+    if (!d.fields.length) {
+        return d.formType === "enquiry" ? "Add at least one question." : "Add at least one field.";
+    }
+
+    if (d.formType !== "enquiry") {
+
+        const have = d.fields.map(function (f) { return axSlug(f.label); });
+
+        const missing = AX_CORE_FIELDS.filter(function (c) {
+            return !have.includes(axSlug(c.label));
+        });
+
+        if (missing.length) {
+            return "An onboarding form needs these fields: " +
+                AX_CORE_FIELDS.map(function (c) { return c.label; }).join(", ") + ".";
+        }
+    }
 
     const seen = new Set();
 
@@ -1159,22 +1203,19 @@ function axValidate(d) {
 
         seen.add(id);
 
-                const source = axSourceOf(f);
+        const source = axSourceOf(f);
 
-                if (source) {
+        if (source) {
 
-                    if (!axSourceOptions(source).length) {
-                        return "Your \"" + f.label + "\" field takes its choices from Classes, and none are set up yet. " +
-                            "Go to Classes in the menu, create your classes and sections, then come back to this form.";
-                    }
+            if (!axSourceOptions(source).length) {
+                return "Your \"" + f.label + "\" field takes its choices from Classes, and none are set up yet. " +
+                    "Go to Classes in the menu, create your classes and sections, then come back to this form.";
+            }
 
-                    continue;
-                }
+            continue;
+        }
 
-                if (
-                    AX_OPTIONS_REQUIRED.includes(f.type) &&
-                    axParseOptions(f.optionsText).length < 2
-                ) {
+        if (AX_OPTIONS_REQUIRED.includes(f.type) && axParseOptions(f.optionsText).length < 2) {
             return "\"" + f.label + "\" needs at least two options.";
         }
     }
@@ -1193,15 +1234,15 @@ function axBuildFields(d) {
             required: !!f.required
         };
 
-                const source = axSourceOf(f);
+        const source = axSourceOf(f);
 
-                if (source) {
+        if (source) {
 
-                    out.options = axSourceOptions(source).slice();
+            out.options = axSourceOptions(source).slice();
 
-                } else if (AX_OPTION_TYPES.includes(f.type)) {
+        } else if (AX_OPTION_TYPES.includes(f.type)) {
 
-                    const options = axParseOptions(f.optionsText);
+            const options = axParseOptions(f.optionsText);
 
             if (options.length) {
                 out.options = options;
@@ -1230,6 +1271,7 @@ async function axSaveForm(status) {
         name: d.name.trim(),
         description: d.description.trim(),
         academicYear: d.academicYear,
+        formType: d.formType === "enquiry" ? "enquiry" : "onboarding",
         status: status,
         fields: axBuildFields(d),
         updatedAt: serverTimestamp()
@@ -1365,24 +1407,60 @@ async function axDeleteForm(formId) {
     axRender();
 }
 
+// Fields for the editor. Onboarding forms always get the core fields first,
+// even if an older form doesn't have them yet.
+function axFieldsForEdit(form, formType) {
+
+    const stored = Array.isArray(form.fields) ? form.fields : [];
+
+    const fromStored = function (f) {
+        return axNewField(f.label, f.type, f.required, f.options || []);
+    };
+
+    if (formType !== "onboarding") {
+        return stored.map(fromStored);
+    }
+
+    const coreIds = AX_CORE_FIELDS.map(function (c) { return axSlug(c.label); });
+
+    const core = AX_CORE_FIELDS.map(function (c) {
+
+        const found = stored.find(function (f) { return axSlug(f.label) === axSlug(c.label); });
+
+        const f = found ? fromStored(found) : axNewField(c.label, c.type, true);
+
+        f.label = c.label;
+        f.type = c.type;
+        f.required = true;
+        f.locked = true;
+
+        return f;
+    });
+
+    const extra = stored
+        .filter(function (f) { return !coreIds.includes(axSlug(f.label)); })
+        .map(fromStored);
+
+    return core.concat(extra);
+}
+
 function axEditForm(formId) {
 
     const form = axFormById(formId);
 
     if (!form || !axCanEditForm(form)) return;
 
+    const formType = axFormTypeOf(form);
+
     AX.draft = {
         formId: formId,
         isNew: false,
         keepStatus: form.status === "draft" ? null : form.status,
+        formType: formType,
         name: form.name || "",
         description: form.description || "",
         academicYear: form.academicYear || axDefaultYear(),
-        fields: axIsLegacy(form)
-            ? axStarterFields()
-            : form.fields.map(function (f) {
-                return axNewField(f.label, f.type, f.required, f.options || []);
-            })
+        fields: axFieldsForEdit(form, formType)
     };
 
     AX.view = "forms";
@@ -1663,7 +1741,7 @@ async function openApplications(options) {
 
     try {
 
-        await Promise.all([axLoadForms(), axLoadApplications(), axLoadClassOptions()]);
+        await Promise.all([axLoadForms(), axLoadApplications(), axLoadEnquiries(), axLoadClassOptions()]);
 
         AX.loaded = true;
 
@@ -1701,7 +1779,8 @@ function axSyncNav() {
 
         const on =
             (key === "forms" && AX.view === "forms") ||
-            (key === "apps" && AX.view === "applications");
+            (key === "apps" && AX.view === "applications") ||
+            (key === "enquiries" && AX.view === "enquiries");
 
         item.classList.toggle("active", on);
     });
@@ -1710,10 +1789,11 @@ function axSyncNav() {
 
     const title = document.getElementById("pageTitle");
 
+    const labels = { forms: "Forms", applications: "Applications", enquiries: "Custom forms" };
+
     if (group && title && group.classList.contains("open")) {
 
-        title.textContent =
-            "Applications · " + (AX.view === "forms" ? "Forms" : "Applications");
+        title.textContent = "Applications · " + labels[AX.view];
     }
 }
 
@@ -1743,9 +1823,13 @@ function axRender() {
         AX.formsMode = "list";
     }
 
-    appsRoot.innerHTML =
-        message +
-        (AX.view === "applications" ? axRenderApplicationsView() : axRenderFormsView());
+    let body;
+
+    if (AX.view === "applications") body = axRenderApplicationsView();
+    else if (AX.view === "enquiries") body = axRenderEnquiriesView();
+    else body = axRenderFormsView();
+
+    appsRoot.innerHTML = message + body;
 
     axSyncNav();
 
@@ -1821,6 +1905,8 @@ function axRenderFormsList() {
 
 function axFormsRow(f) {
 
+    const type = axFormTypeOf(f);
+
     const count = axAppCount(f.id);
 
     const id = axEsc(f.id);
@@ -1835,7 +1921,12 @@ function axFormsRow(f) {
     }
 
     if (f.status === "active") {
+
         actions.push("<button type=\"button\" class=\"ax-btn ax-sm\" data-act=\"copy\" data-id=\"" + id + "\">Copy link</button>");
+
+        if (type === "enquiry") {
+            actions.push("<button type=\"button\" class=\"ax-btn ax-sm\" data-act=\"copy-embed\" data-id=\"" + id + "\">Copy embed code</button>");
+        }
 
         if (AX.canManage) {
             actions.push("<button type=\"button\" class=\"ax-btn ax-sm\" data-act=\"close\" data-id=\"" + id + "\">Close</button>");
@@ -1852,6 +1943,7 @@ function axFormsRow(f) {
 
     return "<tr>" +
         "<td><strong>" + axEsc(f.name || "Untitled form") + "</strong>" +
+        "<div class=\"ax-muted\">" + (type === "enquiry" ? "Custom form" : "Onboarding form") + "</div>" +
         (f.description ? "<div class=\"ax-muted\">" + axEsc(f.description) + "</div>" : "") + "</td>" +
         "<td>" + axEsc(f.academicYear || "—") + "</td>" +
         "<td>" + axBadge(f.status) + "</td>" +
@@ -1863,7 +1955,7 @@ function axFormsRow(f) {
 
 function axRenderBuilder() {
 
-    if (!AX.draft) AX.draft = axBlankDraft();
+    if (!AX.draft) AX.draft = axBlankDraft("onboarding");
 
     const d = AX.draft;
 
@@ -1871,7 +1963,34 @@ function axRenderBuilder() {
 
     if (!years.includes(d.academicYear)) years.unshift(d.academicYear);
 
+    const lockedCount = d.fields.filter(function (f) { return f.locked; }).length;
+
+    const typeCards = [
+        ["onboarding", "Onboarding form",
+            "For admissions. Applications are reviewed and approved here, and approval creates the student's Academx record."],
+        ["enquiry", "Custom form",
+            "For any purpose: admissions, enquiries, hiring, feedback or surveys. Nothing is approved; responses appear under Custom forms."]
+    ].map(function (t) {
+
+        const checked = d.formType === t[0] ? " checked" : "";
+        const disabled = d.isNew ? "" : " disabled";
+
+        return "<label class=\"ax-typecard\"><input type=\"radio\" name=\"axFormType\" data-ft=\"" + t[0] + "\"" +
+            checked + disabled + "><span><strong>" + t[1] + "</strong>" + axEsc(t[2]) + "</span></label>";
+
+    }).join("");
+
+    const typeNote = d.isNew
+        ? "<p class=\"ax-muted\">Switching type resets the fields below.</p>"
+        : "<p class=\"ax-muted\">The form type can't be changed after a form is created.</p>";
+
+    const fieldsNote = d.formType === "enquiry"
+        ? "<p class=\"ax-muted\">Add the questions you need. Nothing is required by default.</p>"
+        : "<p class=\"ax-muted\">These five fields are required on every onboarding form. They can't be removed, renamed or made optional. Add any other fields below them.</p>";
+
     const fields = d.fields.map(function (f, i) {
+
+        const lock = f.locked ? " disabled" : "";
 
         const typeOptions = AX_FIELD_TYPES.map(function (t) {
             return "<option value=\"" + t.value + "\"" +
@@ -1879,39 +1998,38 @@ function axRenderBuilder() {
                 t.label + "</option>";
         }).join("");
 
-                const source = axSourceOf(f);
+        const source = axSourceOf(f);
 
-                const options = source
-                    ? axSourceNote(source)
-                    : AX_OPTION_TYPES.includes(f.type)
+        const optionsBox = AX_OPTION_TYPES.includes(f.type)
             ? "<label class=\"ax-opts\"><span>" +
               (f.type === "checkbox"
                   ? "Choices (optional, one per line; leave empty for a single checkbox)"
                   : "Options (one per line)") +
-              "</span><textarea rows=\"3\" data-f=\"" + i +
-              "\" data-k=\"optionsText\">" + axEsc(f.optionsText) +
-              "</textarea></label>"
+              "</span><textarea rows=\"3\" data-f=\"" + i + "\" data-k=\"optionsText\"" + lock + ">" +
+              axEsc(f.optionsText) + "</textarea></label>"
             : "";
 
-        return "<li class=\"ax-field\">" +
-            "<div class=\"ax-field-row\">" +
+        const options = source ? axSourceNote(source) : optionsBox;
+
+        const actions = f.locked
+            ? "<span class=\"ax-pill ax-submitted\">Required</span>"
+            : "<div class=\"ax-field-actions\">" +
+              "<button type=\"button\" class=\"ax-icon\" data-act=\"up\" data-i=\"" + i +
+              "\" aria-label=\"Move field up\"" + (i <= lockedCount ? " disabled" : "") + ">↑</button>" +
+              "<button type=\"button\" class=\"ax-icon\" data-act=\"down\" data-i=\"" + i +
+              "\" aria-label=\"Move field down\"" + (i === d.fields.length - 1 ? " disabled" : "") + ">↓</button>" +
+              "<button type=\"button\" class=\"ax-icon ax-danger\" data-act=\"del\" data-i=\"" + i +
+              "\" aria-label=\"Delete field\">Delete</button></div>";
+
+        return "<li class=\"ax-field\"><div class=\"ax-field-row\">" +
             "<label class=\"ax-grow\"><span>Field label</span>" +
-            "<input type=\"text\" data-f=\"" + i + "\" data-k=\"label\" value=\"" +
-            axEsc(f.label) + "\" placeholder=\"e.g. Date of birth\"></label>" +
-            "<label><span>Type</span><select data-f=\"" + i +
-            "\" data-k=\"type\">" + typeOptions + "</select></label>" +
-            "<label class=\"ax-check\"><input type=\"checkbox\" data-f=\"" + i +
-            "\" data-k=\"required\"" + (f.required ? " checked" : "") +
-            "><span>Required</span></label>" +
-            "<div class=\"ax-field-actions\">" +
-            "<button type=\"button\" class=\"ax-icon\" data-act=\"up\" data-i=\"" + i +
-            "\" aria-label=\"Move field up\"" + (i === 0 ? " disabled" : "") + ">↑</button>" +
-            "<button type=\"button\" class=\"ax-icon\" data-act=\"down\" data-i=\"" + i +
-            "\" aria-label=\"Move field down\"" +
-            (i === d.fields.length - 1 ? " disabled" : "") + ">↓</button>" +
-            "<button type=\"button\" class=\"ax-icon ax-danger\" data-act=\"del\" data-i=\"" + i +
-            "\" aria-label=\"Delete field\">Delete</button>" +
-            "</div></div>" + options + "</li>";
+            "<input type=\"text\" data-f=\"" + i + "\" data-k=\"label\" value=\"" + axEsc(f.label) + "\"" + lock +
+            " placeholder=\"Type a field name\"></label>" +
+            "<label><span>Type</span><select data-f=\"" + i + "\" data-k=\"type\"" + lock + ">" + typeOptions + "</select></label>" +
+            "<label class=\"ax-check\"><input type=\"checkbox\" data-f=\"" + i + "\" data-k=\"required\"" +
+            (f.required ? " checked" : "") + lock + "><span>Required</span></label>" +
+            actions +
+            "</div>" + options + "</li>";
 
     }).join("");
 
@@ -1920,7 +2038,7 @@ function axRenderBuilder() {
         : d.keepStatus ? "Edit form" : "Edit draft form";
 
     // Published/closed forms keep their status when edited
-    // (only possible while nobody has applied yet).
+    // (only possible while nobody has responded).
     const actions = d.keepStatus
         ? "<button type=\"button\" class=\"ax-btn ax-primary\" data-act=\"keep\">Save changes</button>"
         : "<button type=\"button\" class=\"ax-btn\" data-act=\"draft\">Save draft</button>" +
@@ -1932,21 +2050,16 @@ function axRenderBuilder() {
 
     return "<section class=\"ax-panel\">" +
         "<h3 class=\"ax-panel-title\">" + title + "</h3>" +
+        "<div class=\"ax-typecards\">" + typeCards + "</div>" + typeNote +
         "<div class=\"ax-grid\">" +
         "<label class=\"ax-grow\"><span>Form name</span>" +
         "<input type=\"text\" id=\"axName\" value=\"" + axEsc(d.name) +
         "\" placeholder=\"Student Admission 2026-27\"></label>" +
-        "<label><span>Academic year</span><select id=\"axYear\">" +
-        yearOptions + "</select></label></div>" +
+        "<label><span>Academic year</span><select id=\"axYear\">" + yearOptions + "</select></label></div>" +
         "<label><span>Description</span><textarea id=\"axDesc\" rows=\"2\" " +
-        "placeholder=\"New student admission application\">" +
-        axEsc(d.description) + "</textarea></label>" +
-        "<h4 class=\"ax-subtitle\">Fields</h4>" +
-        "<p class=\"ax-muted\">Applicants fill these in. Role is set by Academx " +
-        "after approval, so it isn't a field.</p>" +
-        "<ul class=\"ax-fields\">" +
-        (fields || "<li class=\"ax-muted\">No fields yet. Add the first one.</li>") +
-        "</ul>" +
+        "placeholder=\"What this form is for\">" + axEsc(d.description) + "</textarea></label>" +
+        "<h4 class=\"ax-subtitle\">Fields</h4>" + fieldsNote +
+        "<ul class=\"ax-fields\">" + (fields || "<li class=\"ax-muted\">No fields yet.</li>") + "</ul>" +
         "<button type=\"button\" class=\"ax-btn\" data-act=\"add\">Add field</button>" +
         "<div class=\"ax-bar\">" + actions +
         "<button type=\"button\" class=\"ax-btn\" data-act=\"cancel\">Cancel</button></div>" +
@@ -1985,15 +2098,18 @@ function axRenderApplicationsView() {
             " <span class=\"ax-chip-count\">" + counts[s] + "</span></button>";
     }).join("");
 
+    // Only onboarding forms produce applications
+    const onboardingForms = AX.forms.filter(function (f) { return axFormTypeOf(f) === "onboarding"; });
+
     const formOptions = "<option value=\"all\">All forms</option>" +
-        AX.forms.map(function (f) {
+        onboardingForms.map(function (f) {
             return "<option value=\"" + axEsc(f.id) + "\"" + (AX.appForm === f.id ? " selected" : "") + ">" +
                 axEsc((f.name || f.id) + (f.academicYear ? " (" + f.academicYear + ")" : "")) + "</option>";
         }).join("");
 
     return axPageHeader(
             "Applications",
-            "Review applications that have been submitted and decide what happens next.",
+            "Onboarding applications. Review them and approve the ones you accept. Approval creates the student's Academx record.",
             "<button type=\"button\" class=\"ax-btn\" data-act=\"refresh\">Refresh</button>"
         ) +
         "<section class=\"ax-panel\">" +
@@ -2193,6 +2309,101 @@ axModalHost.id = "axModalHost";
 
 document.body.appendChild(axModalHost);
 
+// Enquiries: loaded, shown and copied. They have no approval workflow.
+async function axLoadEnquiries() {
+
+    const snap = await getDocs(
+        collection(db, axBase() + "/enquiries")
+    );
+
+    AX.enquiries = snap.docs
+        .map(function (d) { return { id: d.id, ...d.data() }; })
+        .sort(function (a, b) {
+            return ((b.createdAt && b.createdAt.seconds) || 0) -
+                   ((a.createdAt && a.createdAt.seconds) || 0);
+        });
+}
+
+function axEmbedCode(formId) {
+
+    return "<iframe src=\"" + axApplyLink(formId) + "\" width=\"100%\" height=\"800\" " +
+        "style=\"border:0;max-width:720px\" title=\"Custom form\" loading=\"lazy\"></iframe>";
+}
+
+function axCopyEmbed(formId) {
+
+    const code = axEmbedCode(formId);
+
+    return axCopyText(code).then(function (ok) {
+
+        if (ok) {
+            axToast("Embed code copied. Paste it into your website page.", "ok");
+        } else {
+            axToast("Couldn't copy automatically. Copy the code from the box.", "error");
+            window.prompt("Copy this embed code (Ctrl+C):", code);
+        }
+    });
+}
+
+function axRenderEnquiriesView() {
+
+    const rows = AX.enquiries.map(function (e) {
+
+        const s = axSummary(e);
+
+        return "<tr><td><strong>" + axEsc(s.name === "Unnamed applicant" ? "Response" : s.name) + "</strong></td>" +
+            "<td>" + axEsc(s.email || "—") + "</td>" +
+            "<td>" + axEsc(s.phone || "—") + "</td>" +
+            "<td>" + axEsc(s.formName) + "</td>" +
+            "<td>" + axFmtDate(e.createdAt) + "</td>" +
+            "<td><button type=\"button\" class=\"ax-btn ax-sm\" data-act=\"view-enquiry\" data-id=\"" +
+            axEsc(e.id) + "\">View</button></td></tr>";
+    }).join("");
+
+    return axPageHeader(
+            "Custom forms",
+            "Responses to your custom forms. These are for information only and are not approved.",
+            "<button type=\"button\" class=\"ax-btn\" data-act=\"refresh\">Refresh</button>"
+        ) +
+        "<section class=\"ax-panel\">" +
+        (AX.enquiries.length
+            ? "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Name</th><th>Email</th>" +
+              "<th>Phone</th><th>Form</th><th>Received</th><th></th></tr></thead><tbody>" + rows +
+              "</tbody></table></div>"
+            : "<div class=\"ax-empty\"><strong>No responses yet</strong>" +
+              "<p class=\"ax-muted\">Responses appear here once people submit a custom form.</p></div>") +
+        "</section>";
+}
+
+function axEnquiryModalHtml(e) {
+
+    const form = axFormById(e.formId);
+
+    const fields = form && Array.isArray(form.fields) ? form.fields : [];
+
+    const d = e.data || {};
+
+    const known = new Set(fields.map(function (f) { return f.id; }));
+
+    const answers = fields.map(function (f) {
+        return axDlRow(f.label, axEsc(axFmtValue(d[f.id])));
+    }).join("") +
+        Object.keys(d).filter(function (k) { return !known.has(k); }).map(function (k) {
+            return axDlRow(k.replace(/_/g, " "), axEsc(axFmtValue(d[k])));
+        }).join("");
+
+    return "<div class=\"ax-modal-head\"><div><h3 id=\"axModalTitle\">Response</h3>" +
+        "<div class=\"ax-muted\">" + axEsc(e.formName || (form && form.name) || "") + "</div></div>" +
+        "<button type=\"button\" class=\"ax-icon\" data-act=\"close-modal\" aria-label=\"Close\">✕</button></div>" +
+        "<div class=\"ax-modal-body\">" +
+        "<h4 class=\"ax-subtitle\">Answers</h4><dl class=\"ax-dl\">" +
+        (answers || "<p class=\"ax-muted\">No answers were stored.</p>") + "</dl>" +
+        "<h4 class=\"ax-subtitle\">Details</h4><dl class=\"ax-dl\">" +
+        axDlRow("Received", axEsc(axFmtDateTime(e.createdAt))) +
+        axDlRow("Status", axBadge(e.status || "new")) +
+        "</dl></div>";
+}
+
 function axRenderModal() {
 
     let inner = "";
@@ -2209,6 +2420,13 @@ function axRenderModal() {
         const f = axFormById(AX.modal.id);
 
         if (f) inner = axFormModalHtml(f);
+        else AX.modal = null;
+
+    } else if (AX.modal && AX.modal.type === "enquiry") {
+
+        const e = AX.enquiries.find(function (x) { return x.id === AX.modal.id; });
+
+        if (e) inner = axEnquiryModalHtml(e);
         else AX.modal = null;
     }
 
@@ -2260,12 +2478,12 @@ function axAction(act, target) {
             AX.formsMode = "list";
             return axRender();
 
-                case "mode-create":
-                    if (!AX.canManage) return;
-                    if (!AX.draft || !AX.draft.isNew) AX.draft = axBlankDraft();
-                    AX.formsMode = "create";
-                    axLoadClassOptions().then(axRender);
-                    return axRender();
+        case "mode-create":
+            if (!AX.canManage) return;
+            if (!AX.draft || !AX.draft.isNew) AX.draft = axBlankDraft("onboarding");
+            AX.formsMode = "create";
+            axLoadClassOptions().then(axRender);
+            return axRender();
 
         case "forms-filter":
             AX.formsFilter = target.dataset.s;
@@ -2289,33 +2507,49 @@ function axAction(act, target) {
         case "reopen": return axSetStatus(id, "active");
         case "rm": return axDeleteForm(id);
         case "copy": return axCopyLink(id, target);
+        case "copy-embed": return axCopyEmbed(id);
 
         // --- Form builder ---
         case "add":
+            if (!d) return;
             d.fields.push(axNewField());
             return axRender();
 
         case "del":
+            if (!d || !d.fields[i] || d.fields[i].locked) return;
             d.fields.splice(i, 1);
             return axRender();
 
-        case "up":
-            if (i > 0) {
+        case "up": {
+            if (!d) return;
+            const lockedCount = d.fields.filter(function (f) { return f.locked; }).length;
+            if (i > lockedCount) {
                 [d.fields[i - 1], d.fields[i]] = [d.fields[i], d.fields[i - 1]];
                 axRender();
             }
             return;
+        }
 
-        case "down":
-            if (i < d.fields.length - 1) {
+        case "down": {
+            if (!d) return;
+            if (i < d.fields.length - 1 && !d.fields[i].locked) {
                 [d.fields[i + 1], d.fields[i]] = [d.fields[i], d.fields[i + 1]];
                 axRender();
             }
             return;
+        }
 
-        case "draft": return axSaveForm("draft");
-        case "publish": return axSaveForm("active");
-        case "keep": return axSaveForm(d.keepStatus);
+        case "draft":
+            if (!d) return;
+            return axSaveForm("draft");
+
+        case "publish":
+            if (!d) return;
+            return axSaveForm("active");
+
+        case "keep":
+            if (!d) return;
+            return axSaveForm(d.keepStatus);
 
         case "cancel":
             AX.draft = null;
@@ -2350,6 +2584,11 @@ function axAction(act, target) {
                 return axCreateStudentRecord(AX.modal.id);
             }
             return;
+
+        // --- Enquiries ---
+        case "view-enquiry":
+            AX.modal = { type: "enquiry", id: id };
+            return axRenderModal();
 
         case "close-modal":
             return axCloseModal();
@@ -2455,6 +2694,10 @@ document.querySelectorAll("[data-axnav]").forEach(function (item) {
             AX.view = "forms";
             AX.formsMode = "list";
 
+        } else if (key === "enquiries") {
+
+            AX.view = "enquiries";
+
         } else {
 
             AX.view = "applications";
@@ -2463,6 +2706,19 @@ document.querySelectorAll("[data-axnav]").forEach(function (item) {
 
         axRender();
     });
+});
+
+// Form type cards: only for a form that hasn't been created yet
+appsRoot.addEventListener("change", function (event) {
+
+    const el = event.target;
+
+    if (el.dataset.ft === undefined || !AX.draft || !AX.draft.isNew) return;
+
+    AX.draft.formType = el.dataset.ft === "enquiry" ? "enquiry" : "onboarding";
+    AX.draft.fields = axStarterFields(AX.draft.formType);
+
+    axRender();
 });
 
 

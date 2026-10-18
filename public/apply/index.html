@@ -13,6 +13,8 @@
     <!-- Application forms are for applicants who have the link, not for search engines -->
     <meta name="robots" content="noindex, nofollow">
 
+    <title>Application Form | Academx</title>
+
     <!--
         This single file serves every URL of the form /apply/{institutionId}/{formId}
         (Firebase Hosting rewrite: /apply/** -> /apply/index.html).
@@ -48,6 +50,14 @@
             margin: 0 auto;
             padding: 28px 16px 40px;
             flex: 1;
+        }
+
+        .topbrand {
+            text-align: center;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 20px;
         }
 
         .card {
@@ -297,6 +307,8 @@
 
 <div class="wrap">
 
+    <div class="topbrand">Academx</div>
+
     <main id="main" aria-live="polite">
 
         <div class="card state">
@@ -313,316 +325,294 @@
 
 </div>
 
+<div class="foot">Powered by Academx</div>
+
 
 <script type="module">
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 
-// Note: firebase-auth is deliberately NOT imported.
-// Applicants never sign in and no Authentication account is created.
+    // Note: firebase-auth is deliberately NOT imported.
+    // Applicants never sign in and no Authentication account is created.
 
-import {
-    getFirestore,
-    doc,
-    getDoc,
-    collection,
-    addDoc,
-    serverTimestamp
-} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
-
-
-// ============================================================
-// FIREBASE (same public web configuration as the SIS)
-// ============================================================
-
-const firebaseConfig = {
-    apiKey: "AIzaSyC0xiNgbWSDeKP7QHifTPPMGUa1PylRbqk",
-    authDomain: "school-app-backend-38e01.firebaseapp.com",
-    projectId: "school-app-backend-38e01",
-    storageBucket: "school-app-backend-38e01.firebasestorage.app",
-    messagingSenderId: "601113409800",
-    appId: "1:601113409800:web:543470df04f660464d14bd",
-    measurementId: "G-SCTKJLXJ38"
-};
-
-const app = initializeApp(firebaseConfig);
-
-const db = getFirestore(app);
+    import {
+        getFirestore,
+        doc,
+        getDoc,
+        collection,
+        addDoc,
+        serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 
 
-// ============================================================
-// HELPERS
-// ============================================================
+    // ============================================================
+    // FIREBASE (same public web configuration as the SIS)
+    // ============================================================
 
-const main = document.getElementById("main");
+    const firebaseConfig = {
+        apiKey: "AIzaSyC0xiNgbWSDeKP7QHifTPPMGUa1PylRbqk",
+        authDomain: "school-app-backend-38e01.firebaseapp.com",
+        projectId: "school-app-backend-38e01",
+        storageBucket: "school-app-backend-38e01.firebasestorage.app",
+        messagingSenderId: "601113409800",
+        appId: "1:601113409800:web:543470df04f660464d14bd",
+        measurementId: "G-SCTKJLXJ38"
+    };
 
-const ID_PATTERN = /^[A-Za-z0-9_-]{1,120}$/;
+    const app = initializeApp(firebaseConfig);
 
-const LIMITS = { text: 200, email: 254, phone: 20, textarea: 3000 };
-
-// Builds a DOM element without using innerHTML, so form labels and
-// options coming from Firestore can never inject markup.
-function el(tag, props, ...children) {
-
-    const node = document.createElement(tag);
-
-    Object.entries(props || {}).forEach(function ([key, value]) {
-
-        if (value === false || value === null || value === undefined) return;
-
-        if (key === "class") node.className = value;
-        else if (key === "text") node.textContent = value;
-        else if (key === "for") node.htmlFor = value;
-        else if (value === true) node.setAttribute(key, "");
-        else node.setAttribute(key, value);
-    });
-
-    children.flat().forEach(function (child) {
-
-        if (child === null || child === undefined || child === false) return;
-
-        node.append(child.nodeType ? child : document.createTextNode(String(child)));
-    });
-
-    return node;
-}
-
-function showMessage(title, text) {
-
-    main.replaceChildren(
-        el("div", { class: "card state" },
-            el("h1", { text: title }),
-            el("p", { class: "desc", text: text })
-        )
-    );
-
-    document.title = title;
-}
+    const db = getFirestore(app);
 
 
-// ============================================================
-// READ THE URL:  /apply/{institutionId}/{formId}
-// ============================================================
+    // ============================================================
+    // HELPERS
+    // ============================================================
 
-function readUrl() {
+    const main = document.getElementById("main");
 
-    const parts = location.pathname.split("/").filter(Boolean);
+    const ID_PATTERN = /^[A-Za-z0-9_-]{1,120}$/;
 
-    // parts[0] === "apply"
-    try {
+    const LIMITS = { text: 200, email: 254, phone: 20, textarea: 3000 };
 
-        const institutionId = decodeURIComponent(parts[1] || "");
-        const formId = decodeURIComponent(parts[2] || "");
+    // Builds a DOM element without using innerHTML, so form labels and
+    // options coming from Firestore can never inject markup.
+    function el(tag, props, ...children) {
 
-        if (!ID_PATTERN.test(institutionId) || !ID_PATTERN.test(formId)) {
+        const node = document.createElement(tag);
+
+        Object.entries(props || {}).forEach(function ([key, value]) {
+
+            if (value === false || value === null || value === undefined) return;
+
+            if (key === "class") node.className = value;
+            else if (key === "text") node.textContent = value;
+            else if (key === "for") node.htmlFor = value;
+            else if (value === true) node.setAttribute(key, "");
+            else node.setAttribute(key, value);
+        });
+
+        children.flat().forEach(function (child) {
+
+            if (child === null || child === undefined || child === false) return;
+
+            node.append(child.nodeType ? child : document.createTextNode(String(child)));
+        });
+
+        return node;
+    }
+
+    function showMessage(title, text) {
+
+        main.replaceChildren(
+            el("div", { class: "card state" },
+                el("h1", { text: title }),
+                el("p", { class: "desc", text: text })
+            )
+        );
+
+        document.title = title + " | Academx";
+    }
+
+
+    // ============================================================
+    // READ THE URL:  /apply/{institutionId}/{formId}
+    // ============================================================
+
+    function readUrl() {
+
+        const parts = location.pathname.split("/").filter(Boolean);
+
+        // parts[0] === "apply"
+        try {
+
+            const institutionId = decodeURIComponent(parts[1] || "");
+            const formId = decodeURIComponent(parts[2] || "");
+
+            if (!ID_PATTERN.test(institutionId) || !ID_PATTERN.test(formId)) {
+                return null;
+            }
+
+            return { institutionId, formId };
+
+        } catch (error) {
+
             return null;
         }
-
-        return { institutionId, formId };
-
-    } catch (error) {
-
-        return null;
-    }
-}
-
-
-// ============================================================
-// LOAD FORM
-// ============================================================
-
-async function start() {
-
-    const ids = readUrl();
-
-    if (!ids) {
-
-        showMessage(
-            "Link not valid",
-            "This application link looks incomplete or incorrect. Please check the link you were given."
-        );
-
-        return;
     }
 
-    let form;
 
-    try {
+    // ============================================================
+    // LOAD FORM
+    // ============================================================
 
-        const snap = await getDoc(
-            doc(db, "institutions", ids.institutionId, "applicationForms", ids.formId)
-        );
+    async function start() {
 
-        if (!snap.exists()) {
+        const ids = readUrl();
+
+        if (!ids) {
+
+            showMessage(
+                "Link not valid",
+                "This application link looks incomplete or incorrect. Please check the link you were given."
+            );
+
+            return;
+        }
+
+        let form;
+
+        try {
+
+            const snap = await getDoc(
+                doc(db, "institutions", ids.institutionId, "applicationForms", ids.formId)
+            );
+
+            if (!snap.exists()) {
+                return notAvailable();
+            }
+
+            form = snap.data();
+
+        } catch (error) {
+
+            console.error("Load form error:", error);
+
+            // Closed and draft forms are not publicly readable, so
+            // "permission-denied" also means "not accepting applications".
+            if (error.code === "permission-denied") {
+                return notAvailable();
+            }
+
+            showMessage(
+                "Something went wrong",
+                "We couldn't load this application form. Please check your connection and try again."
+            );
+
+            return;
+        }
+
+        if (form.status !== "active") {
             return notAvailable();
         }
 
-        form = snap.data();
+        if (!Array.isArray(form.fields) || form.fields.length === 0) {
 
-    } catch (error) {
+            showMessage(
+                "Form not ready",
+                "This application form hasn't been set up yet. Please contact the institution."
+            );
 
-        console.error("Load form error:", error);
-
-        // Closed and draft forms are not publicly readable, so
-        // "permission-denied" also means "not accepting applications".
-        if (error.code === "permission-denied") {
-            return notAvailable();
+            return;
         }
+
+        renderForm(ids, form);
+    }
+
+    function notAvailable() {
 
         showMessage(
-            "Something went wrong",
-            "We couldn't load this application form. Please check your connection and try again."
+            "Applications not available",
+            "This application form is closed or the link is incorrect. Please contact the institution for help."
+        );
+    }
+
+
+    // ============================================================
+    // RENDER FORM
+    // ============================================================
+
+    function renderForm(ids, form) {
+
+        document.title = (form.name || "Application Form") + " | Academx";
+
+        const fieldsHost = el("div", {});
+
+        form.fields.forEach(function (field) {
+            fieldsHost.append(buildField(field));
+        });
+
+        const errorBox = el("div", { class: "alert hidden", role: "alert", tabindex: "-1" });
+
+        const submitButton = el("button", { type: "submit", class: "submit", text: "Submit application" });
+
+        // Honeypot: real people never see or fill this, simple bots do.
+        const honeypot = el("input", {
+            type: "text", name: "website", tabindex: "-1", autocomplete: "off", "aria-hidden": "true"
+        });
+
+        const formEl = el("form", { novalidate: true },
+            errorBox,
+            fieldsHost,
+            el("div", { class: "hp", "aria-hidden": "true" }, honeypot),
+            submitButton,
+            el("p", { class: "note", text: "Fields marked * are required." })
         );
 
-        return;
-    }
-
-    if (form.status !== "active") {
-        return notAvailable();
-    }
-
-    if (!Array.isArray(form.fields) || form.fields.length === 0) {
-
-        showMessage(
-            "Form not ready",
-            "This application form hasn't been set up yet. Please contact the institution."
+        main.replaceChildren(
+            el("div", { class: "card" },
+                form.academicYear ? el("span", { class: "year", text: "Academic year " + form.academicYear }) : null,
+                el("h1", { text: form.name || "Application Form" }),
+                form.description ? el("p", { class: "desc", text: form.description }) : null
+            ),
+            el("div", { class: "card" }, formEl)
         );
 
-        return;
+        formEl.addEventListener("submit", function (event) {
+
+            event.preventDefault();
+
+            submit(ids, form, formEl, errorBox, submitButton, honeypot);
+        });
     }
 
-    renderForm(ids, form);
-}
+    function labelFor(field, forId, asLegend) {
 
-function notAvailable() {
+        const content = [
+            field.label,
+            field.required
+                ? el("span", { class: "req", "aria-hidden": "true", text: "*" })
+                : el("span", { class: "opt", text: "(optional)" })
+        ];
 
-    showMessage(
-        "Applications not available",
-        "This application form is closed or the link is incorrect. Please contact the institution for help."
-    );
-}
+        return asLegend
+            ? el("legend", {}, content)
+            : el("label", { for: forId }, content);
+    }
 
+    function buildField(field) {
 
-// ============================================================
-// RENDER FORM
-// ============================================================
+        const domId = "f_" + field.id;
+        const errId = domId + "_err";
+        const options = Array.isArray(field.options) ? field.options : [];
 
-function renderForm(ids, form) {
+        const wrapperTag = (field.type === "radio" || (field.type === "checkbox" && options.length)) ? "fieldset" : "div";
 
-    document.title = form.name || "Application Form";
+        const wrapper = el(wrapperTag, { class: "field", "data-field": field.id });
 
-    const fieldsHost = el("div", {});
+        const error = el("p", { class: "field-error hidden", id: errId });
 
-    form.fields.forEach(function (field) {
-        fieldsHost.append(buildField(field));
-    });
+        switch (field.type) {
 
-    const errorBox = el("div", { class: "alert hidden", role: "alert", tabindex: "-1" });
+            case "select": {
 
-    const submitButton = el("button", { type: "submit", class: "submit", text: "Submit application" });
+                const select = el("select", {
+                    class: "control", id: domId, name: field.id,
+                    required: false, "aria-describedby": errId
+                });
 
-    // Honeypot: real people never see or fill this, simple bots do.
-    const honeypot = el("input", {
-        type: "text", name: "website", tabindex: "-1", autocomplete: "off", "aria-hidden": "true"
-    });
+                select.append(el("option", { value: "", text: "Select…" }));
 
-    const formEl = el("form", { novalidate: true },
-        errorBox,
-        fieldsHost,
-        el("div", { class: "hp", "aria-hidden": "true" }, honeypot),
-        submitButton,
-        el("p", { class: "note", text: "Fields marked * are required." })
-    );
+                options.forEach(function (option) {
+                    select.append(el("option", { value: option, text: option }));
+                });
 
-    main.replaceChildren(
-        el("div", { class: "card" },
-            form.academicYear ? el("span", { class: "year", text: "Academic year " + form.academicYear }) : null,
-            el("h1", { text: form.name || "Application Form" }),
-            form.description ? el("p", { class: "desc", text: form.description }) : null
-        ),
-        el("div", { class: "card" }, formEl)
-    );
+                wrapper.append(labelFor(field, domId), select);
 
-    formEl.addEventListener("submit", function (event) {
+                break;
+            }
 
-        event.preventDefault();
+            case "radio": {
 
-        submit(ids, form, formEl, errorBox, submitButton, honeypot);
-    });
-}
-
-function labelFor(field, forId, asLegend) {
-
-    const content = [
-        field.label,
-        field.required
-            ? el("span", { class: "req", "aria-hidden": "true", text: "*" })
-            : el("span", { class: "opt", text: "(optional)" })
-    ];
-
-    return asLegend
-        ? el("legend", {}, content)
-        : el("label", { for: forId }, content);
-}
-
-function buildField(field) {
-
-    const domId = "f_" + field.id;
-    const errId = domId + "_err";
-    const options = Array.isArray(field.options) ? field.options : [];
-
-    const wrapperTag = (field.type === "radio" || (field.type === "checkbox" && options.length)) ? "fieldset" : "div";
-
-    const wrapper = el(wrapperTag, { class: "field", "data-field": field.id });
-
-    const error = el("p", { class: "field-error hidden", id: errId });
-
-    switch (field.type) {
-
-        case "select": {
-
-            const select = el("select", {
-                class: "control", id: domId, name: field.id,
-                required: false, "aria-describedby": errId
-            });
-
-            select.append(el("option", { value: "", text: "Select…" }));
-
-            options.forEach(function (option) {
-                select.append(el("option", { value: option, text: option }));
-            });
-
-            wrapper.append(labelFor(field, domId), select);
-
-            break;
-        }
-
-        case "radio": {
-
-            wrapper.append(labelFor(field, domId, true));
-
-            const group = el("div", { class: "choices", "aria-describedby": errId });
-
-            options.forEach(function (option, i) {
-
-                group.append(
-                    el("label", { class: "choice" },
-                        el("input", { type: "radio", name: field.id, value: option, id: domId + "_" + i }),
-                        el("span", { text: option })
-                    )
-                );
-            });
-
-            wrapper.append(group);
-
-            break;
-        }
-
-        case "checkbox": {
-
-            if (options.length) {
-
-                // Group of choices: several can be ticked
                 wrapper.append(labelFor(field, domId, true));
 
                 const group = el("div", { class: "choices", "aria-describedby": errId });
@@ -631,7 +621,7 @@ function buildField(field) {
 
                     group.append(
                         el("label", { class: "choice" },
-                            el("input", { type: "checkbox", name: field.id, value: option, id: domId + "_" + i }),
+                            el("input", { type: "radio", name: field.id, value: option, id: domId + "_" + i }),
                             el("span", { text: option })
                         )
                     );
@@ -639,301 +629,344 @@ function buildField(field) {
 
                 wrapper.append(group);
 
-            } else {
+                break;
+            }
 
-                // Single yes/no checkbox
-                wrapper.append(
-                    el("label", { class: "choice", for: domId },
-                        el("input", { type: "checkbox", name: field.id, id: domId, "aria-describedby": errId }),
-                        el("span", {},
-                            field.label,
-                            field.required ? el("span", { class: "req", "aria-hidden": "true", text: "*" }) : null
+            case "checkbox": {
+
+                if (options.length) {
+
+                    // Group of choices: several can be ticked
+                    wrapper.append(labelFor(field, domId, true));
+
+                    const group = el("div", { class: "choices", "aria-describedby": errId });
+
+                    options.forEach(function (option, i) {
+
+                        group.append(
+                            el("label", { class: "choice" },
+                                el("input", { type: "checkbox", name: field.id, value: option, id: domId + "_" + i }),
+                                el("span", { text: option })
+                            )
+                        );
+                    });
+
+                    wrapper.append(group);
+
+                } else {
+
+                    // Single yes/no checkbox
+                    wrapper.append(
+                        el("label", { class: "choice", for: domId },
+                            el("input", { type: "checkbox", name: field.id, id: domId, "aria-describedby": errId }),
+                            el("span", {},
+                                field.label,
+                                field.required ? el("span", { class: "req", "aria-hidden": "true", text: "*" }) : null
+                            )
                         )
-                    )
-                );
-            }
-
-            break;
-        }
-
-        case "textarea": {
-
-            wrapper.append(
-                labelFor(field, domId),
-                el("textarea", {
-                    class: "control", id: domId, name: field.id, rows: "4",
-                    maxlength: LIMITS.textarea, "aria-describedby": errId
-                })
-            );
-
-            break;
-        }
-
-        default: {
-
-            const inputType = {
-                email: "email", phone: "tel", number: "number", date: "date"
-            }[field.type] || "text";
-
-            const attrs = {
-                class: "control", id: domId, name: field.id, type: inputType,
-                "aria-describedby": errId
-            };
-
-            if (field.type === "email") { attrs.autocomplete = "email"; attrs.maxlength = LIMITS.email; }
-            else if (field.type === "phone") { attrs.autocomplete = "tel"; attrs.inputmode = "tel"; attrs.maxlength = LIMITS.phone; }
-            else if (field.type === "number") { attrs.inputmode = "decimal"; attrs.step = "any"; }
-            else if (field.type === "text") { attrs.maxlength = LIMITS.text; }
-
-            wrapper.append(labelFor(field, domId), el("input", attrs));
-        }
-    }
-
-    wrapper.append(error);
-
-    return wrapper;
-}
-
-
-// ============================================================
-// READ + VALIDATE VALUES
-// Returns { value, error } for one field.
-// ============================================================
-
-function readField(field, formEl) {
-
-    const options = Array.isArray(field.options) ? field.options : [];
-
-    const inputs = Array.from(formEl.querySelectorAll('[name="' + CSS.escape(field.id) + '"]'));
-
-    const required = !!field.required;
-
-    switch (field.type) {
-
-        case "checkbox": {
-
-            if (options.length) {
-
-                const chosen = inputs.filter(function (i) { return i.checked; }).map(function (i) { return i.value; });
-
-                if (required && chosen.length === 0) return { error: "Select at least one option." };
-
-                return { value: chosen };
-            }
-
-            const ticked = inputs[0] ? inputs[0].checked : false;
-
-            if (required && !ticked) return { error: "This box must be ticked." };
-
-            return { value: ticked };
-        }
-
-        case "radio": {
-
-            const chosen = inputs.find(function (i) { return i.checked; });
-
-            if (!chosen) return required ? { error: "Please choose one option." } : { value: "" };
-
-            return { value: chosen.value };
-        }
-
-        case "select": {
-
-            const value = inputs[0] ? inputs[0].value : "";
-
-            if (!value) return required ? { error: "Please select an option." } : { value: "" };
-
-            if (!options.includes(value)) return { error: "Please choose one of the listed options." };
-
-            return { value };
-        }
-
-        case "number": {
-
-            const raw = inputs[0] ? inputs[0].value.trim() : "";
-
-            if (!raw) return required ? { error: "This field is required." } : { value: "" };
-
-            const number = Number(raw);
-
-            if (!Number.isFinite(number)) return { error: "Enter a valid number." };
-
-            return { value: number };
-        }
-
-        default: {
-
-            const raw = inputs[0] ? inputs[0].value.trim() : "";
-
-            if (!raw) return required ? { error: "This field is required." } : { value: "" };
-
-            if (field.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(raw)) {
-                return { error: "Enter a valid email address." };
-            }
-
-            if (field.type === "phone") {
-
-                const digits = raw.replace(/\D/g, "");
-
-                if (!/^[0-9+\-()\s.]+$/.test(raw) || digits.length < 7 || digits.length > 15) {
-                    return { error: "Enter a valid phone number." };
+                    );
                 }
+
+                break;
             }
 
-            if (field.type === "date" && Number.isNaN(Date.parse(raw))) {
-                return { error: "Enter a valid date." };
+            case "textarea": {
+
+                wrapper.append(
+                    labelFor(field, domId),
+                    el("textarea", {
+                        class: "control", id: domId, name: field.id, rows: "4",
+                        maxlength: LIMITS.textarea, "aria-describedby": errId
+                    })
+                );
+
+                break;
             }
 
-            return { value: raw };
+            default: {
+
+                const inputType = {
+                    email: "email", phone: "tel", number: "number", date: "date"
+                }[field.type] || "text";
+
+                const attrs = {
+                    class: "control", id: domId, name: field.id, type: inputType,
+                    "aria-describedby": errId
+                };
+
+                if (field.type === "email") { attrs.autocomplete = "email"; attrs.maxlength = LIMITS.email; }
+                else if (field.type === "phone") { attrs.autocomplete = "tel"; attrs.inputmode = "tel"; attrs.maxlength = LIMITS.phone; }
+                else if (field.type === "number") { attrs.inputmode = "decimal"; attrs.step = "any"; }
+                else if (field.type === "text") { attrs.maxlength = LIMITS.text; }
+
+                wrapper.append(labelFor(field, domId), el("input", attrs));
+            }
+        }
+
+        wrapper.append(error);
+
+        return wrapper;
+    }
+
+
+    // ============================================================
+    // READ + VALIDATE VALUES
+    // Returns { value, error } for one field.
+    // ============================================================
+
+    function readField(field, formEl) {
+
+        const options = Array.isArray(field.options) ? field.options : [];
+
+        const inputs = Array.from(formEl.querySelectorAll('[name="' + CSS.escape(field.id) + '"]'));
+
+        const required = !!field.required;
+
+        switch (field.type) {
+
+            case "checkbox": {
+
+                if (options.length) {
+
+                    const chosen = inputs.filter(function (i) { return i.checked; }).map(function (i) { return i.value; });
+
+                    if (required && chosen.length === 0) return { error: "Select at least one option." };
+
+                    return { value: chosen };
+                }
+
+                const ticked = inputs[0] ? inputs[0].checked : false;
+
+                if (required && !ticked) return { error: "This box must be ticked." };
+
+                return { value: ticked };
+            }
+
+            case "radio": {
+
+                const chosen = inputs.find(function (i) { return i.checked; });
+
+                if (!chosen) return required ? { error: "Please choose one option." } : { value: "" };
+
+                return { value: chosen.value };
+            }
+
+            case "select": {
+
+                const value = inputs[0] ? inputs[0].value : "";
+
+                if (!value) return required ? { error: "Please select an option." } : { value: "" };
+
+                if (!options.includes(value)) return { error: "Please choose one of the listed options." };
+
+                return { value };
+            }
+
+            case "number": {
+
+                const raw = inputs[0] ? inputs[0].value.trim() : "";
+
+                if (!raw) return required ? { error: "This field is required." } : { value: "" };
+
+                const number = Number(raw);
+
+                if (!Number.isFinite(number)) return { error: "Enter a valid number." };
+
+                return { value: number };
+            }
+
+            default: {
+
+                const raw = inputs[0] ? inputs[0].value.trim() : "";
+
+                if (!raw) return required ? { error: "This field is required." } : { value: "" };
+
+                if (field.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(raw)) {
+                    return { error: "Enter a valid email address." };
+                }
+
+                if (field.type === "phone") {
+
+                    const digits = raw.replace(/\D/g, "");
+
+                    if (!/^[0-9+\-()\s.]+$/.test(raw) || digits.length < 7 || digits.length > 15) {
+                        return { error: "Enter a valid phone number." };
+                    }
+                }
+
+                if (field.type === "date" && Number.isNaN(Date.parse(raw))) {
+                    return { error: "Enter a valid date." };
+                }
+
+                return { value: raw };
+            }
         }
     }
-}
 
-function setFieldError(formEl, field, message) {
+    function setFieldError(formEl, field, message) {
 
-    const wrapper = formEl.querySelector('[data-field="' + CSS.escape(field.id) + '"]');
+        const wrapper = formEl.querySelector('[data-field="' + CSS.escape(field.id) + '"]');
 
-    if (!wrapper) return null;
+        if (!wrapper) return null;
 
-    const error = wrapper.querySelector(".field-error");
+        const error = wrapper.querySelector(".field-error");
 
-    error.textContent = message || "";
-    error.classList.toggle("hidden", !message);
+        error.textContent = message || "";
+        error.classList.toggle("hidden", !message);
 
-    wrapper.querySelectorAll("input, select, textarea").forEach(function (control) {
+        wrapper.querySelectorAll("input, select, textarea").forEach(function (control) {
 
-        if (message) control.setAttribute("aria-invalid", "true");
-        else control.removeAttribute("aria-invalid");
-    });
+            if (message) control.setAttribute("aria-invalid", "true");
+            else control.removeAttribute("aria-invalid");
+        });
 
-    return wrapper;
-}
-
-
-// ============================================================
-// SUBMIT
-// Writes ONLY to institutions/{institutionId}/applications.
-// No Authentication account and no student user is created.
-// ============================================================
-
-async function submit(ids, form, formEl, errorBox, submitButton, honeypot) {
-
-    errorBox.classList.add("hidden");
-
-    // Bots: pretend it worked, store nothing.
-    if (honeypot.value) {
-
-        return showSuccess(form, null);
+        return wrapper;
     }
 
-    const data = {};
 
-    let firstBad = null;
+    // ============================================================
+    // SUBMIT
+    // Writes ONLY to institutions/{institutionId}/applications.
+    // No Authentication account and no student user is created.
+    // ============================================================
 
-    form.fields.forEach(function (field) {
+    async function submit(ids, form, formEl, errorBox, submitButton, honeypot) {
 
-        const result = readField(field, formEl);
+        errorBox.classList.add("hidden");
 
-        const wrapper = setFieldError(formEl, field, result.error);
+        // Bots: pretend it worked, store nothing.
+        if (honeypot.value) {
 
-        if (result.error) {
+            return showSuccess(form, null);
+        }
 
-            if (!firstBad) firstBad = wrapper;
+        const data = {};
+
+        let firstBad = null;
+
+        form.fields.forEach(function (field) {
+
+            const result = readField(field, formEl);
+
+            const wrapper = setFieldError(formEl, field, result.error);
+
+            if (result.error) {
+
+                if (!firstBad) firstBad = wrapper;
+
+                return;
+            }
+
+            const empty =
+                result.value === "" ||
+                (Array.isArray(result.value) && result.value.length === 0);
+
+            // Optional fields left empty are not stored
+            if (!empty) data[field.id] = result.value;
+        });
+
+        if (firstBad) {
+
+            errorBox.textContent = "Please fix the highlighted fields and submit again.";
+            errorBox.classList.remove("hidden");
+
+            const control = firstBad.querySelector("input, select, textarea");
+
+            if (control) control.focus();
+            else errorBox.focus();
 
             return;
         }
 
-        const empty =
-            result.value === "" ||
-            (Array.isArray(result.value) && result.value.length === 0);
+        if (Object.keys(data).length === 0) {
 
-        // Optional fields left empty are not stored
-        if (!empty) data[field.id] = result.value;
-    });
+            errorBox.textContent = "Please fill in the form before submitting.";
+            errorBox.classList.remove("hidden");
 
-    if (firstBad) {
+            return;
+        }
 
-        errorBox.textContent = "Please fix the highlighted fields and submit again.";
-        errorBox.classList.remove("hidden");
+        submitButton.disabled = true;
+        submitButton.textContent = "Submitting…";
 
-        const control = firstBad.querySelector("input, select, textarea");
+        try {
 
-        if (control) control.focus();
-        else errorBox.focus();
+            const isEnquiry = form.formType === "enquiry";
 
-        return;
+            const ref = await addDoc(
+                collection(db, "institutions", ids.institutionId, isEnquiry ? "enquiries" : "applications"),
+                isEnquiry
+                    ? {
+                        formId: ids.formId,
+                        formName: form.name || "",
+                        academicYear: form.academicYear || "",
+                        status: "new",
+                        createdAt: serverTimestamp(),
+                        data: data
+                    }
+                    : {
+                        formId: ids.formId,
+                        formName: form.name || "",
+                        academicYear: form.academicYear || "",
+                        status: "submitted",
+                        submittedAt: serverTimestamp(),
+                        createdAt: serverTimestamp(),
+                        data: data
+                    }
+            );
+
+            showSuccess(form, ref.id);
+
+        } catch (error) {
+
+            console.error("Submit application error:", error);
+
+            errorBox.textContent =
+                error.code === "permission-denied"
+                    ? "We couldn't accept your application. The form may have just closed. Please contact the institution."
+                    : "Your application could not be submitted. Please check your connection and try again.";
+
+            errorBox.classList.remove("hidden");
+            errorBox.focus();
+
+            submitButton.disabled = false;
+            submitButton.textContent = "Submit application";
+        }
     }
 
-    if (Object.keys(data).length === 0) {
+    function showSuccess(form, reference) {
 
-        errorBox.textContent = "Please fill in the form before submitting.";
-        errorBox.classList.remove("hidden");
+        document.title = "Submitted | Academx";
 
-        return;
-    }
+        const isEnquiry = form && form.formType === "enquiry";
 
-    submitButton.disabled = true;
-    submitButton.textContent = "Submitting…";
+        const title = isEnquiry ? "Response sent" : "Application submitted";
 
-    try {
+        const text = isEnquiry
+            ? "Thank you. Your response to " + ((form && form.name) || "this form") +
+              " has been sent. The institution will get back to you."
+            : "Thank you. Your application for " + ((form && form.name) || "this program") +
+              " has been received. The institution will review it and contact you.";
 
-        const ref = await addDoc(
-            collection(db, "institutions", ids.institutionId, "applications"),
-            {
-                formId: ids.formId,
-                formName: form.name || "",
-                academicYear: form.academicYear || "",
-                status: "submitted",
-                submittedAt: serverTimestamp(),
-                createdAt: serverTimestamp(),
-                data: data
-            }
+        main.replaceChildren(
+            el("div", { class: "card state" },
+                el("div", { class: "tick", "aria-hidden": "true", text: "✓" }),
+                el("h1", { text: title }),
+                el("p", { class: "desc", text: text }),
+                reference
+                    ? el("div", {},
+                        el("p", { class: "note", text: "Your reference number" }),
+                        el("div", { class: "ref", text: reference }),
+                        el("p", { class: "note", text: "Please keep this for your records." }))
+                    : null
+            )
         );
 
-        showSuccess(form, ref.id);
-
-    } catch (error) {
-
-        console.error("Submit application error:", error);
-
-        errorBox.textContent =
-            error.code === "permission-denied"
-                ? "We couldn't accept your application. The form may have just closed. Please contact the institution."
-                : "Your application could not be submitted. Please check your connection and try again.";
-
-        errorBox.classList.remove("hidden");
-        errorBox.focus();
-
-        submitButton.disabled = false;
-        submitButton.textContent = "Submit application";
+        window.scrollTo({ top: 0, behavior: "smooth" });
     }
-}
-
-function showSuccess(form, reference) {
-
-    document.title = "Application submitted";
-
-    main.replaceChildren(
-        el("div", { class: "card state" },
-            el("div", { class: "tick", "aria-hidden": "true", text: "✓" }),
-            el("h1", { text: "Application submitted" }),
-            el("p", { class: "desc",
-                text: "Thank you. Your application for " + (form.name || "this program") +
-                      " has been received. The institution will review it and contact you." }),
-            reference
-                ? el("div", {},
-                    el("p", { class: "note", text: "Your reference number" }),
-                    el("div", { class: "ref", text: reference }),
-                    el("p", { class: "note", text: "Please keep this for your records." }))
-                : null
-        )
-    );
-
-    window.scrollTo({ top: 0, behavior: "smooth" });
-}
 
 
-start();
+    start();
 
 </script>
 
