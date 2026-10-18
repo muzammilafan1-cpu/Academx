@@ -144,6 +144,7 @@ export function initGrading(env) {
             canManage: false,
             section: "type",
             current: null,          // the saved setup, or null if not set up yet
+            typeChosen: false,      // true once the admin picks a type on this page
             form: defaultsFor("marks_percentage"),
             busy: false,
             error: ""
@@ -186,6 +187,19 @@ export function initGrading(env) {
 
     function dis() {
         return S.canManage ? "" : " disabled";
+    }
+
+    // A type counts as selected once it is saved, or once the admin picks one on this page
+    function typeSelected() {
+        return !!S.current || S.typeChosen;
+    }
+
+    // Divisions only exist for Marks percentage, so they are hidden until that type is chosen
+    function visibleSections() {
+        return SECTIONS.filter(function (s) {
+            if (s.key !== "divisions") return true;
+            return typeSelected() && S.form.gradingType === "marks_percentage";
+        });
     }
 
 
@@ -353,7 +367,11 @@ export function initGrading(env) {
                 : "<div class=\"ax-msg ax-error\" role=\"status\">Only administrators can change grading. You can view it here.</div>") +
             (S.error ? "<div class=\"ax-msg ax-error\" role=\"alert\">" + esc(S.error) + "</div>" : "");
 
-        const nav = SECTIONS.map(function (s) {
+        if (!visibleSections().some(function (s) { return s.key === S.section; })) {
+            S.section = "type";
+        }
+
+        const nav = visibleSections().map(function (s) {
             return "<button type=\"button\" class=\"gd-item" + (S.section === s.key ? " on" : "") +
                 "\" data-gs=\"" + s.key + "\">" + esc(s.label) +
                 (sectionDirty(s.key) ? " <span class=\"gd-tag\">unsaved</span>" : "") + "</button>";
@@ -398,7 +416,7 @@ export function initGrading(env) {
 
         const cards = GRADING_TYPES.map(function (t) {
             return "<label class=\"ax-typecard\"><input type=\"radio\" name=\"gdType\" data-gd=\"type\" value=\"" +
-                t.value + "\"" + (f.gradingType === t.value ? " checked" : "") + dis() + "><span><strong>" +
+                t.value + "\"" + (typeSelected() && f.gradingType === t.value ? " checked" : "") + dis() + "><span><strong>" +
                 esc(t.label) + "</strong>" + esc(t.help) + "</span></label>";
         }).join("");
 
@@ -527,6 +545,9 @@ export function initGrading(env) {
         const options = [["nearest", "To nearest whole number"], ["down", "Always down"], ["up", "Always up"]];
 
         return "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">Rounding</h3>" +
+            "<p class=\"ax-muted\">Rounding decides how a final result with decimals is shown. It is applied once, to the final " +
+            "percentage or CGPA, not to each subject. Example: a result of 72.6%. <strong>To nearest</strong> shows 73%. " +
+            "<strong>Always down</strong> shows 72%. <strong>Always up</strong> shows 73%.</p>" +
             "<label><span>How results are rounded</span><select data-gd=\"round\"" + dis() + ">" +
             options.map(function (o) {
                 return "<option value=\"" + o[0] + "\"" + (f.rounding.mode === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
@@ -596,6 +617,11 @@ export function initGrading(env) {
 
         if (S.busy) return;
 
+        if (key !== "type" && !typeSelected()) {
+            S.error = "Choose a grading type first, then save it. The other sections depend on it.";
+            return render();
+        }
+
         const label = SECTIONS.find(function (s) { return s.key === key; }).label;
 
         S.busy = true;
@@ -631,6 +657,8 @@ export function initGrading(env) {
     function changeType(value) {
 
         const info = typeInfo(value);
+
+        S.typeChosen = true;
 
         if (S.form.gradingType !== value) {
 
