@@ -4,8 +4,11 @@
 // Reads:  gradingSettings/{institutionId} (browser)
 // Writes: POST /api/grading/save (Render; checks the rules and keeps old versions)
 //
+// Each section (Grading type, Components, Pass rule, Divisions, Rounding) has its
+// own Save. Saving a section writes that section and keeps the other sections as
+// they were last saved.
+//
 // Default values are "to verify" against each board's published rules.
-// The school confirms or changes them before results are published.
 // app.js creates this with initGrading({ db, auth, apiBase, toast }).
 // ============================================================
 
@@ -15,7 +18,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 
 
-// ---------- the four grading types and their defaults ----------
+// ---------- grading types and defaults ----------
 
 const GRADING_TYPES = [
     {
@@ -38,6 +41,14 @@ const GRADING_TYPES = [
         label: "Pass or fail",
         help: "Each subject is pass or fail. No grades or divisions."
     }
+];
+
+const SECTIONS = [
+    { key: "type", label: "Grading type" },
+    { key: "components", label: "Components and weights" },
+    { key: "pass", label: "Pass rule" },
+    { key: "divisions", label: "Divisions" },
+    { key: "rounding", label: "Rounding" }
 ];
 
 const STANDARD_COMPONENTS = [
@@ -109,6 +120,10 @@ function defaultsFor(type) {
     return { gradingType: type, ...clone(DEFAULTS[type]) };
 }
 
+function same(a, b) {
+    return JSON.stringify(a) === JSON.stringify(b);
+}
+
 
 // ---------- the page ----------
 
@@ -127,8 +142,8 @@ export function initGrading(env) {
         return {
             inst: null,
             canManage: false,
-            loaded: false,
-            current: null,     // saved setup, or null if the school hasn't chosen yet
+            section: "type",
+            current: null,          // the saved setup, or null if not set up yet
             form: defaultsFor("marks_percentage"),
             busy: false,
             error: ""
@@ -169,6 +184,34 @@ export function initGrading(env) {
         });
     }
 
+    function dis() {
+        return S.canManage ? "" : " disabled";
+    }
+
+
+    // ---------- unsaved changes, per section ----------
+
+    function sectionDirty(key) {
+
+        const f = S.form;
+
+        if (!S.current) return true;
+
+        const saved = S.current;
+
+        if (key === "type") return f.gradingType !== saved.gradingType || !same(f.bands, saved.bands || []);
+        if (key === "components") return !same(f.components, saved.components);
+        if (key === "pass") return !same(f.passRule, saved.passRule);
+        if (key === "divisions") return !same(f.divisions, saved.divisions || { enabled: false, cutoffs: [] });
+        if (key === "rounding") return !same(f.rounding, saved.rounding);
+
+        return false;
+    }
+
+    function dirtySections() {
+        return SECTIONS.filter(function (s) { return sectionDirty(s.key); }).map(function (s) { return s.label; });
+    }
+
 
     // ---------- data ----------
 
@@ -179,8 +222,6 @@ export function initGrading(env) {
         S.current = snap.exists() ? snap.data() : null;
 
         S.form = S.current ? clone(S.current) : defaultsFor("marks_percentage");
-
-        S.loaded = true;
     }
 
     async function api(path, body) {
@@ -294,19 +335,7 @@ export function initGrading(env) {
 
         if (!root) return;
 
-        const f = S.form;
-
-        const info = typeInfo(f.gradingType);
-
-        const usesBands = f.gradingType === "grade_points" || f.gradingType === "letter_custom";
-
-        const usesPoints = f.gradingType === "grade_points";
-
-        const usesDivisions = f.gradingType === "marks_percentage";
-
-        const dis = S.canManage ? "" : " disabled";
-
-        const sum = f.components.reduce(function (n, c) { return n + (Number(c.weight) || 0); }, 0);
+        const dirty = dirtySections();
 
         const status = S.current
             ? "Version " + S.current.version + " · saved " + fmtDate(S.current.updatedAt)
@@ -314,48 +343,66 @@ export function initGrading(env) {
 
         const head =
             "<div class=\"ax-head\"><div><h2 class=\"ax-title\">Grading</h2>" +
-            "<p class=\"ax-sub\">How marks become results for this school. " + esc(status) + "</p></div></div>" +
+            "<p class=\"ax-sub\">How marks become results for this school. " + esc(status) + "</p>" +
+            (dirty.length
+                ? "<p class=\"gd-dirty\">Not saved yet: " + esc(dirty.join(", ")) + "</p>"
+                : "") +
+            "</div></div>" +
             (S.canManage
                 ? ""
                 : "<div class=\"ax-msg ax-error\" role=\"status\">Only administrators can change grading. You can view it here.</div>") +
             (S.error ? "<div class=\"ax-msg ax-error\" role=\"alert\">" + esc(S.error) + "</div>" : "");
 
-        // 1. Grading type
-        const typeCards = GRADING_TYPES.map(function (t) {
+        const nav = SECTIONS.map(function (s) {
+            return "<button type=\"button\" class=\"gd-item" + (S.section === s.key ? " on" : "") +
+                "\" data-gs=\"" + s.key + "\">" + esc(s.label) +
+                (sectionDirty(s.key) ? " <span class=\"gd-tag\">unsaved</span>" : "") + "</button>";
+        }).join("");
+
+        const body =
+            S.section === "type" ? typeSection()
+            : S.section === "components" ? componentsSection()
+            : S.section === "pass" ? passSection()
+            : S.section === "divisions" ? divisionsSection()
+            : roundingSection();
+
+        root.innerHTML = head +
+            "<div class=\"gd-layout\"><nav class=\"gd-nav\" aria-label=\"Grading sections\">" + nav + "</nav>" +
+            "<div class=\"gd-main\">" + body + "</div></div>";
+    }
+
+    function saveBar(key, label) {
+
+        const note = S.canManage
+            ? "<p class=\"gd-status\">Saves this section. Other sections keep their last saved values.</p>"
+            : "";
+
+        const button = S.canManage
+            ? "<div class=\"ax-bar\"><button type=\"button\" class=\"ax-btn ax-primary\" data-gd=\"save\" data-sec=\"" + key + "\"" +
+              (S.busy ? " disabled" : "") + ">" + (S.busy ? "Saving…" : label) + "</button></div>"
+            : "";
+
+        return note + button;
+    }
+
+
+    // ---------- section 1: grading type and grade bands ----------
+
+    function typeSection() {
+
+        const f = S.form;
+
+        const usesBands = f.gradingType === "grade_points" || f.gradingType === "letter_custom";
+
+        const usesPoints = f.gradingType === "grade_points";
+
+        const cards = GRADING_TYPES.map(function (t) {
             return "<label class=\"ax-typecard\"><input type=\"radio\" name=\"gdType\" data-gd=\"type\" value=\"" +
-                t.value + "\"" + (f.gradingType === t.value ? " checked" : "") + dis + "><span><strong>" +
+                t.value + "\"" + (f.gradingType === t.value ? " checked" : "") + dis() + "><span><strong>" +
                 esc(t.label) + "</strong>" + esc(t.help) + "</span></label>";
         }).join("");
 
-        const typeSection =
-            "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">1. Grading type</h3>" +
-            "<div class=\"ax-typecards\">" + typeCards + "</div>" +
-            "<p class=\"ax-muted\">Choosing a type loads its standard values. You can change every value below.</p>" +
-            "</section>";
-
-        // 2. Components
-        const compRows = f.components.map(function (c, i) {
-            return "<tr><td><input type=\"text\" data-gd=\"cname\" data-i=\"" + i + "\" value=\"" + esc(c.name) +
-                "\" maxlength=\"40\"" + dis + "></td><td><input type=\"number\" data-gd=\"cweight\" data-i=\"" + i +
-                "\" value=\"" + esc(c.weight) + "\" min=\"1\" max=\"100\" step=\"1\"" + dis + "></td><td>" +
-                (S.canManage && f.components.length > 1
-                    ? "<button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-gd=\"cdel\" data-i=\"" + i + "\">Remove</button>"
-                    : "") + "</td></tr>";
-        }).join("");
-
-        const componentsSection =
-            "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">2. Components and weights</h3>" +
-            "<p class=\"ax-muted\">What makes up each subject's total. The weights must add up to 100. " +
-            "They add up to <strong>" + sum + "</strong>" + (sum === 100 ? "" : " (should be 100)") + ".</p>" +
-            "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Component</th><th>Weight %</th><th></th></tr></thead><tbody>" +
-            compRows + "</tbody></table></div>" +
-            (S.canManage && f.components.length < 6
-                ? "<div class=\"ax-bar\"><button type=\"button\" class=\"ax-btn\" data-gd=\"cadd\">Add component</button></div>"
-                : "") +
-            "</section>";
-
-        // 3. Grade bands (letter and grade-point types)
-        let bandsSection = "";
+        let bands = "";
 
         if (usesBands) {
 
@@ -364,85 +411,218 @@ export function initGrading(env) {
                 const max = i === 0 ? 100 : f.bands[i - 1].minMarks - 1;
 
                 return "<tr><td><input type=\"text\" data-gd=\"bgrade\" data-i=\"" + i + "\" value=\"" + esc(b.grade) +
-                    "\" maxlength=\"5\"" + dis + "></td><td><input type=\"number\" data-gd=\"bmin\" data-i=\"" + i +
-                    "\" value=\"" + esc(b.minMarks) + "\" min=\"0\" max=\"100\" step=\"1\"" + dis + "></td><td class=\"ax-muted\">" +
+                    "\" maxlength=\"5\"" + dis() + "></td><td><input type=\"number\" data-gd=\"bmin\" data-i=\"" + i +
+                    "\" value=\"" + esc(b.minMarks) + "\" min=\"0\" max=\"100\" step=\"1\"" + dis() + "></td><td class=\"ax-muted\">" +
                     esc(max) + "</td>" + (usesPoints
                         ? "<td><input type=\"number\" data-gd=\"bpoint\" data-i=\"" + i + "\" value=\"" + esc(b.gradePoint) +
-                          "\" min=\"0\" max=\"10\" step=\"0.1\"" + dis + "></td>"
+                          "\" min=\"0\" max=\"10\" step=\"0.1\"" + dis() + "></td>"
                         : "") + "<td>" +
                     (S.canManage && f.bands.length > 2
                         ? "<button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-gd=\"bdel\" data-i=\"" + i + "\">Remove</button>"
                         : "") + "</td></tr>";
             }).join("");
 
-            bandsSection =
-                "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">3. Grade bands</h3>" +
+            bands =
+                "<h4 class=\"ax-subtitle\">Grade bands</h4>" +
                 "<p class=\"ax-muted\">Each band runs from its minimum up to the row above. The top band ends at 100 and the lowest must start at 0.</p>" +
                 "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Grade</th><th>From marks</th><th>To marks</th>" +
                 (usesPoints ? "<th>Grade point</th>" : "") + "<th></th></tr></thead><tbody>" + rows + "</tbody></table></div>" +
                 (S.canManage && f.bands.length < 20
                     ? "<div class=\"ax-bar\"><button type=\"button\" class=\"ax-btn\" data-gd=\"badd\">Add band</button></div>"
-                    : "") +
-                "</section>";
+                    : "");
         }
 
-        // 4. Pass rule
-        const passSection =
-            "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">" + (usesBands ? "4" : "3") + ". Pass rule</h3>" +
-            "<div class=\"ax-grid\"><label><span>Minimum % to pass a subject</span>" +
-            "<input type=\"number\" data-gd=\"pass\" value=\"" + esc(f.passRule.minPercent) + "\" min=\"0\" max=\"100\" step=\"1\"" + dis + "></label>" +
-            "<label class=\"ax-check\"><input type=\"checkbox\" data-gd=\"allpass\"" + (f.passRule.allMustPass ? " checked" : "") + dis +
-            "><span>A student must pass every subject</span></label></div></section>";
-
-        // 5. Divisions (percentage type only)
-        let divisionsSection = "";
-
-        if (usesDivisions) {
-
-            const cutoffRows = f.divisions.cutoffs.map(function (d, i) {
-                return "<tr><td><input type=\"text\" data-gd=\"dname\" data-i=\"" + i + "\" value=\"" + esc(d.name) +
-                    "\" maxlength=\"40\"" + dis + "></td><td><input type=\"number\" data-gd=\"dmin\" data-i=\"" + i +
-                    "\" value=\"" + esc(d.min) + "\" min=\"0\" max=\"100\" step=\"1\"" + dis + "></td><td>" +
-                    (S.canManage && f.divisions.cutoffs.length > 1
-                        ? "<button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-gd=\"ddel\" data-i=\"" + i + "\">Remove</button>"
-                        : "") + "</td></tr>";
-            }).join("");
-
-            divisionsSection =
-                "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">5. Divisions</h3>" +
-                "<label class=\"ax-check\"><input type=\"checkbox\" data-gd=\"dison\"" + (f.divisions.enabled ? " checked" : "") + dis +
-                "><span>This school reports divisions</span></label>" +
-                (f.divisions.enabled
-                    ? "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Division name</th><th>From %</th><th></th></tr></thead><tbody>" +
-                      cutoffRows + "</tbody></table></div>" +
-                      (S.canManage && f.divisions.cutoffs.length < 6
-                          ? "<div class=\"ax-bar\"><button type=\"button\" class=\"ax-btn\" data-gd=\"dadd\">Add division</button></div>"
-                          : "")
-                    : "") +
-                "</section>";
-        }
-
-        // 6. Rounding
-        const roundSection =
-            "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">" +
-            (usesBands ? (usesDivisions ? "6" : "5") : (usesDivisions ? "6" : "4")) + ". Rounding</h3>" +
-            "<label><span>How results are rounded</span><select data-gd=\"round\"" + dis + ">" +
-            [["nearest", "To nearest whole number"], ["down", "Always down"], ["up", "Always up"]].map(function (r) {
-                return "<option value=\"" + r[0] + "\"" + (f.rounding.mode === r[0] ? " selected" : "") + ">" + r[1] + "</option>";
-            }).join("") + "</select></label></section>";
-
-        const saveBar = S.canManage
-            ? "<div class=\"ax-bar\"><button type=\"button\" class=\"ax-btn ax-primary\" data-gd=\"save\"" +
-              (S.busy ? " disabled" : "") + ">" + (S.busy ? "Saving…" : "Save grading") + "</button></div>"
-            : "";
-
-        root.innerHTML = head + typeSection + componentsSection + bandsSection + passSection +
-            divisionsSection + roundSection + saveSection(saveBar);
+        return "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">Grading type</h3>" +
+            "<div class=\"ax-typecards\">" + cards + "</div>" +
+            "<p class=\"ax-muted\">Choosing a type loads its standard values into this page. Nothing is saved until you press Save.</p>" +
+            bands + saveBar("type", "Save grading type") + "</section>";
     }
 
-    function saveSection(bar) {
-        return "<section class=\"ax-panel\">" + bar + "<p class=\"ax-muted\">Saving keeps the previous version, so results already " +
-            "calculated still show the rules they were worked out with.</p></section>";
+
+    // ---------- section 2: components and weights ----------
+
+    function componentsSection() {
+
+        const f = S.form;
+
+        const sum = f.components.reduce(function (n, c) { return n + (Number(c.weight) || 0); }, 0);
+
+        const rows = f.components.map(function (c, i) {
+            return "<tr><td><input type=\"text\" data-gd=\"cname\" data-i=\"" + i + "\" value=\"" + esc(c.name) +
+                "\" maxlength=\"40\"" + dis() + "></td><td><input type=\"number\" data-gd=\"cweight\" data-i=\"" + i +
+                "\" value=\"" + esc(c.weight) + "\" min=\"1\" max=\"100\" step=\"1\"" + dis() + "></td><td>" +
+                (S.canManage && f.components.length > 1
+                    ? "<button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-gd=\"cdel\" data-i=\"" + i + "\">Remove</button>"
+                    : "") + "</td></tr>";
+        }).join("");
+
+        return "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">Components and weights</h3>" +
+            "<p class=\"ax-muted\">What makes up each subject's total. The weights must add up to 100. " +
+            "They add up to <strong>" + sum + "</strong>" + (sum === 100 ? "" : " (should be 100)") + ".</p>" +
+            "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Component</th><th>Weight %</th><th></th></tr></thead><tbody>" +
+            rows + "</tbody></table></div>" +
+            (S.canManage && f.components.length < 6
+                ? "<div class=\"ax-bar\"><button type=\"button\" class=\"ax-btn\" data-gd=\"cadd\">Add component</button></div>"
+                : "") +
+            saveBar("components", "Save components") + "</section>";
+    }
+
+
+    // ---------- section 3: pass rule ----------
+
+    function passSection() {
+
+        const f = S.form;
+
+        return "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">Pass rule</h3>" +
+            "<div class=\"ax-grid\"><label><span>Minimum % to pass a subject</span>" +
+            "<input type=\"number\" data-gd=\"pass\" value=\"" + esc(f.passRule.minPercent) + "\" min=\"0\" max=\"100\" step=\"1\"" + dis() + "></label>" +
+            "<label class=\"ax-check\"><input type=\"checkbox\" data-gd=\"allpass\"" + (f.passRule.allMustPass ? " checked" : "") + dis() +
+            "><span>A student must pass every subject</span></label></div>" +
+            saveBar("pass", "Save pass rule") + "</section>";
+    }
+
+
+    // ---------- section 4: divisions (percentage type only) ----------
+
+    function divisionsSection() {
+
+        const f = S.form;
+
+        if (f.gradingType !== "marks_percentage") {
+            return "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">Divisions</h3>" +
+                "<p class=\"ax-muted\">Divisions apply to the Marks percentage grading type only. Choose it under Grading type to set divisions.</p>" +
+                "</section>";
+        }
+
+        const rows = f.divisions.cutoffs.map(function (d, i) {
+            return "<tr><td><input type=\"text\" data-gd=\"dname\" data-i=\"" + i + "\" value=\"" + esc(d.name) +
+                "\" maxlength=\"40\"" + dis() + "></td><td><input type=\"number\" data-gd=\"dmin\" data-i=\"" + i +
+                "\" value=\"" + esc(d.min) + "\" min=\"0\" max=\"100\" step=\"1\"" + dis() + "></td><td>" +
+                (S.canManage && f.divisions.cutoffs.length > 1
+                    ? "<button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-gd=\"ddel\" data-i=\"" + i + "\">Remove</button>"
+                    : "") + "</td></tr>";
+        }).join("");
+
+        return "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">Divisions</h3>" +
+            "<label class=\"ax-check\"><input type=\"checkbox\" data-gd=\"dison\"" + (f.divisions.enabled ? " checked" : "") + dis() +
+            "><span>This school reports divisions</span></label>" +
+            (f.divisions.enabled
+                ? "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Division name</th><th>From %</th><th></th></tr></thead><tbody>" +
+                  rows + "</tbody></table></div>" +
+                  (S.canManage && f.divisions.cutoffs.length < 6
+                      ? "<div class=\"ax-bar\"><button type=\"button\" class=\"ax-btn\" data-gd=\"dadd\">Add division</button></div>"
+                      : "")
+                : "") +
+            saveBar("divisions", "Save divisions") + "</section>";
+    }
+
+
+    // ---------- section 5: rounding ----------
+
+    function roundingSection() {
+
+        const f = S.form;
+
+        const options = [["nearest", "To nearest whole number"], ["down", "Always down"], ["up", "Always up"]];
+
+        return "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">Rounding</h3>" +
+            "<label><span>How results are rounded</span><select data-gd=\"round\"" + dis() + ">" +
+            options.map(function (o) {
+                return "<option value=\"" + o[0] + "\"" + (f.rounding.mode === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
+            }).join("") + "</select></label>" +
+            saveBar("rounding", "Save rounding") + "</section>";
+    }
+
+
+    // ---------- saving one section ----------
+
+    // Start from the last saved setup and replace only the section being saved
+    function payloadFor(key) {
+
+        const f = S.form;
+
+        const saved = S.current || defaultsFor(f.gradingType);
+
+        const p = {
+            gradingType: saved.gradingType,
+            components: clone(saved.components),
+            bands: clone(saved.bands || []),
+            passRule: clone(saved.passRule),
+            divisions: clone(saved.divisions || { enabled: false, cutoffs: [] }),
+            rounding: clone(saved.rounding)
+        };
+
+        if (key === "type") { p.gradingType = f.gradingType; p.bands = clone(f.bands); }
+        if (key === "components") p.components = clone(f.components);
+        if (key === "pass") p.passRule = clone(f.passRule);
+        if (key === "divisions") p.divisions = clone(f.divisions);
+        if (key === "rounding") p.rounding = clone(f.rounding);
+
+        return p;
+    }
+
+    function toApi(p) {
+
+        const usesBands = p.gradingType === "grade_points" || p.gradingType === "letter_custom";
+
+        return {
+            institutionId: S.inst,
+            gradingType: p.gradingType,
+            components: p.components.map(function (c) {
+                return { name: String(c.name).trim(), weight: Number(c.weight) };
+            }),
+            bands: usesBands
+                ? p.bands.map(function (b) {
+                    const row = { minMarks: Number(b.minMarks), grade: String(b.grade).trim() };
+                    if (p.gradingType === "grade_points") row.gradePoint = Number(b.gradePoint);
+                    return row;
+                })
+                : [],
+            passRule: { minPercent: Number(p.passRule.minPercent), allMustPass: !!p.passRule.allMustPass },
+            divisions: p.gradingType === "marks_percentage" && p.divisions.enabled
+                ? {
+                    enabled: true,
+                    cutoffs: p.divisions.cutoffs.map(function (d) {
+                        return { name: String(d.name).trim(), min: Number(d.min) };
+                    })
+                }
+                : { enabled: false, cutoffs: [] },
+            rounding: { mode: p.rounding.mode }
+        };
+    }
+
+    async function save(key) {
+
+        if (S.busy) return;
+
+        const label = SECTIONS.find(function (s) { return s.key === key; }).label;
+
+        S.busy = true;
+        S.error = "";
+        render();
+
+        try {
+
+            const result = await api("/api/grading/save", toApi(payloadFor(key)));
+
+            S.busy = false;
+
+            await load();
+
+            S.section = key;
+
+            toast(label + " saved as version " + result.version + ".", "ok");
+
+            render();
+
+        } catch (error) {
+
+            S.busy = false;
+            S.error = apiErrorText(error);
+
+            render();
+        }
     }
 
 
@@ -452,15 +632,15 @@ export function initGrading(env) {
 
         const info = typeInfo(value);
 
-        if (S.current || S.form.gradingType !== value) {
+        if (S.form.gradingType !== value) {
 
-            if (!confirm("Load the standard values for " + info.label + "? This replaces the values on this page. Nothing is saved until you press Save.")) {
+            if (!confirm("Load the standard values for " + info.label + " into this page? Nothing is saved until you press Save.")) {
                 render();
                 return;
             }
-        }
 
-        S.form = defaultsFor(value);
+            S.form = { gradingType: value, ...clone(DEFAULTS[value]), components: S.form.components };
+        }
 
         S.error = "";
 
@@ -489,67 +669,8 @@ export function initGrading(env) {
             if (el.checked && !f.divisions.cutoffs.length) {
                 f.divisions.cutoffs = clone(DEFAULTS.marks_percentage.divisions.cutoffs);
             }
-            render();
         }
         else if (kind === "round") f.rounding.mode = el.value;
-    }
-
-    async function save() {
-
-        if (S.busy) return;
-
-        const f = S.form;
-
-        const usesBands = f.gradingType === "grade_points" || f.gradingType === "letter_custom";
-
-        const payload = {
-            institutionId: S.inst,
-            gradingType: f.gradingType,
-            components: f.components.map(function (c) {
-                return { name: String(c.name).trim(), weight: Number(c.weight) };
-            }),
-            bands: usesBands
-                ? f.bands.map(function (b) {
-                    const row = { minMarks: Number(b.minMarks), grade: String(b.grade).trim() };
-                    if (f.gradingType === "grade_points") row.gradePoint = Number(b.gradePoint);
-                    return row;
-                })
-                : [],
-            passRule: { minPercent: Number(f.passRule.minPercent), allMustPass: !!f.passRule.allMustPass },
-            divisions: f.gradingType === "marks_percentage" && f.divisions.enabled
-                ? {
-                    enabled: true,
-                    cutoffs: f.divisions.cutoffs.map(function (d) {
-                        return { name: String(d.name).trim(), min: Number(d.min) };
-                    })
-                }
-                : { enabled: false, cutoffs: [] },
-            rounding: { mode: f.rounding.mode }
-        };
-
-        S.busy = true;
-        S.error = "";
-        render();
-
-        try {
-
-            const result = await api("/api/grading/save", payload);
-
-            S.busy = false;
-
-            await load();
-
-            toast("Grading saved as version " + result.version + ".", "ok");
-
-            render();
-
-        } catch (error) {
-
-            S.busy = false;
-            S.error = apiErrorText(error);
-
-            render();
-        }
     }
 
 
@@ -558,6 +679,14 @@ export function initGrading(env) {
     if (root) {
 
         root.addEventListener("click", function (event) {
+
+            const nav = event.target.closest("[data-gs]");
+
+            if (nav) {
+                S.section = nav.dataset.gs;
+                S.error = "";
+                return render();
+            }
 
             const t = event.target.closest("[data-gd]");
 
@@ -569,7 +698,7 @@ export function initGrading(env) {
 
             const i = Number(t.dataset.i);
 
-            if (act === "save") return save();
+            if (act === "save") return save(t.dataset.sec);
 
             if (act === "cadd") { f.components.push({ name: "New component", weight: 0 }); return render(); }
             if (act === "cdel") { f.components.splice(i, 1); return render(); }
@@ -589,11 +718,13 @@ export function initGrading(env) {
 
             const el = event.target;
 
-            if (!S.canManage) return;
+            if (!S.canManage || !el.dataset.gd) return;
 
             if (el.dataset.gd === "type") return changeType(el.value);
 
-            if (el.dataset.gd) { setField(el); render(); }
+            setField(el);
+
+            render();
         });
 
         root.addEventListener("input", function (event) {

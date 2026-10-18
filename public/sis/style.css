@@ -1207,3 +1207,19 @@ button.ax-stat:hover {
 .ax-root .ax-typecard > span { display: block; margin: 0; font-size: 13px; font-weight: 400; color: #687386; line-height: 1.5; }
 .ax-root .ax-typecard > span strong { display: block; font-size: 14px; color: #172033; margin-bottom: 4px; }
 .ax-root .ax-typecard:has(input:checked) { border-color: #1565c0; background: #eef5fd; }
+
+/* Settings > Grading: section list */
+.gd-layout { display: flex; gap: 22px; align-items: flex-start; }
+.gd-nav { width: 230px; flex-shrink: 0; border: 1px solid #e7ebf2; border-radius: 12px; padding: 8px; background: #ffffff; }
+.gd-item { display: block; width: 100%; text-align: left; font: inherit; font-size: 14px; border: 0; background: none; padding: 10px 12px; border-radius: 9px; color: #5d687a; cursor: pointer; margin-bottom: 2px; }
+.gd-item:hover { background: #f4f7fb; color: #1565c0; }
+.gd-item.on { background: #eef5fd; color: #1565c0; font-weight: 600; }
+.gd-tag { font-size: 11px; color: #b54708; background: #fffaeb; border: 1px solid #fedf89; border-radius: 999px; padding: 1px 7px; margin-left: 4px; font-weight: 600; }
+.gd-main { flex: 1; min-width: 0; }
+.gd-status { font-size: 13px; color: #687386; margin: 10px 0 0; }
+.gd-dirty { font-size: 13px; color: #b54708; font-weight: 600; margin: 6px 0 0; }
+@media (max-width: 700px) {
+  .gd-layout { flex-direction: column; }
+  .gd-nav { width: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
+  .gd-item { width: auto; }
+}
