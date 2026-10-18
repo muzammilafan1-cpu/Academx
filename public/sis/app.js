@@ -3,6 +3,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { initPeople } from "./people.js";
 import { initAttendance } from "./attendance.js";
 import { initAcademic } from "./academic.js";
+import { initGrading } from "./grading.js";
 
 import {
     getAuth,
@@ -62,6 +63,13 @@ const people = initPeople({
 });
 
 const attendance = initAttendance({ db: db });
+
+const grading = initGrading({
+    db: db,
+    auth: auth,
+    apiBase: AX_API_BASE,
+    toast: function (text, type) { axToast(text, type); }
+});
 
 const academic = initAcademic({
     db: db,
@@ -445,6 +453,7 @@ function showPage(
         "attendance",
         "applications",
         "academicRecords",
+        "grading",
         "security"
     ];
 
@@ -541,6 +550,8 @@ function showPage(
 
         classes: "Classes",
 
+        grading: "Settings · Grading",
+
         attendance: "Attendance",
 
         applications: "Applications",
@@ -599,6 +610,11 @@ function showPage(
     if (page === "attendance") attendance.open();
 
     if (page === "academicRecords") academic.open();
+
+    if (page === "grading") grading.open();
+
+    const settingsGroup = document.getElementById("settingsGroup");
+    if (settingsGroup) settingsGroup.classList.toggle("open", page === "grading");
 }
 
 
@@ -706,6 +722,7 @@ function setApplicationsContext(uid, userData) {
     people.setContext(uid, userData);
     attendance.setContext(userData.institutionId);
     academic.setContext(userData.institutionId, userData.role);
+    grading.setContext(userData.institutionId, userData.role);
 }
 
 function resetApplications() {
@@ -715,6 +732,7 @@ function resetApplications() {
     people.reset();
     attendance.reset();
     academic.reset();
+    grading.reset();
 
     if (appsRoot) {
         appsRoot.innerHTML = "";

@@ -201,6 +201,10 @@
                         Applications
                     </div>
 
+                    <div class="nav-subitem" data-axnav="enquiries">
+                        Custom forms
+                    </div>
+
                 </div>
 
             </div>
@@ -214,6 +218,34 @@
                     onclick="showPage('academicRecords', this)"
             >
                 Academic Records
+            </div>
+
+
+            <!-- Settings (sub-navigation). More settings are added as data-setnav items. -->
+
+            <div
+                    class="nav-group"
+                    id="settingsGroup"
+            >
+
+                <div
+                        class="nav-item"
+                        id="settingsNav"
+                        onclick="showPage('grading', this)"
+                >
+                    Settings
+                </div>
+
+                <div class="nav-children">
+
+                    <div class="nav-subitem" data-setnav="grading" onclick="showPage('grading', this)">
+                        Grading
+                    </div>
+
+                    <!-- Future settings: add one nav-subitem per setting here -->
+
+                </div>
+
             </div>
 
 
@@ -393,6 +425,24 @@
             <!-- =================================================
                  SECURITY
             ================================================== -->
+
+            <!-- =================================================
+                 SETTINGS > GRADING
+            ================================================== -->
+
+            <div
+                    id="gradingPage"
+                    class="page-card hidden"
+            >
+
+                <div
+                        id="gradingRoot"
+                        class="ax-root ax-root-top"
+                ></div>
+
+            </div>
+
+
 
             <div
                     id="securityPage"
