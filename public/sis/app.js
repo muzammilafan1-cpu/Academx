@@ -3,7 +3,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { initPeople } from "./people.js";
 import { initAttendance } from "./attendance.js";
 import { initAcademic } from "./academic.js";
-import { initGrading } from "./grading.js";
+import { initRules } from "./rules.js";
+import { initConfig } from "./config.js";
 import { initSecurity } from "./security.js";
 
 import {
@@ -66,12 +67,14 @@ const people = initPeople({
 
 const attendance = initAttendance({ db: db });
 
-const grading = initGrading({
+const rules = initRules({
     db: db,
     auth: auth,
     apiBase: AX_API_BASE,
     toast: function (text, type) { axToast(text, type); }
 });
+
+const config = initConfig({ db: db });
 
 const security = initSecurity({
     db: db,
@@ -463,7 +466,8 @@ function showPage(
         "attendance",
         "applications",
         "academicRecords",
-        "grading",
+        "rules",
+        "config",
         "security"
     ];
 
@@ -560,7 +564,9 @@ function showPage(
 
         classes: "Classes",
 
-        grading: "Settings · Grading",
+        rules: "Business rules",
+
+        config: "Configuration",
 
         attendance: "Attendance",
 
@@ -621,12 +627,14 @@ function showPage(
 
     if (page === "academicRecords") academic.open();
 
-    if (page === "grading") grading.open();
+    if (page === "rules") rules.open();
+
+    if (page === "config") config.open();
 
     if (page === "security") security.open();
 
     const settingsGroup = document.getElementById("settingsGroup");
-    if (settingsGroup) settingsGroup.classList.toggle("open", page === "grading");
+    if (settingsGroup) settingsGroup.classList.toggle("open", page === "rules" || page === "config");
 }
 
 
@@ -734,7 +742,8 @@ function setApplicationsContext(uid, userData) {
     people.setContext(uid, userData);
     attendance.setContext(userData.institutionId);
     academic.setContext(userData.institutionId, userData.role);
-    grading.setContext(userData.institutionId, userData.role);
+    rules.setContext(userData.institutionId, userData.role);
+    config.setContext(userData.institutionId);
     security.setContext(userData.institutionId, userData.role);
 
     // Only admins see Security in the menu
@@ -749,7 +758,8 @@ function resetApplications() {
     people.reset();
     attendance.reset();
     academic.reset();
-    grading.reset();
+    rules.reset();
+    config.reset();
     security.reset();
 
     if (appsRoot) {

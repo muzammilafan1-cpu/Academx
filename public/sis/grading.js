@@ -48,7 +48,8 @@ const SECTIONS = [
     { key: "components", label: "Components and weights" },
     { key: "pass", label: "Pass rule" },
     { key: "divisions", label: "Divisions" },
-    { key: "rounding", label: "Rounding" }
+    { key: "rounding", label: "Rounding" },
+    { key: "marks", label: "Marks entry" }
 ];
 
 const STANDARD_COMPONENTS = [
@@ -117,7 +118,7 @@ function clone(value) {
 }
 
 function defaultsFor(type) {
-    return { gradingType: type, ...clone(DEFAULTS[type]) };
+    return { gradingType: type, marksEntry: { adminOverride: false }, ...clone(DEFAULTS[type]) };
 }
 
 function same(a, b) {
@@ -134,7 +135,7 @@ export function initGrading(env) {
     const apiBase = env.apiBase;
     const toast = env.toast;
 
-    const root = document.getElementById("gradingRoot");
+    const root = env.root || document.getElementById("gradingRoot");
 
     let S = fresh();
 
@@ -218,6 +219,7 @@ export function initGrading(env) {
         if (key === "pass") return !same(f.passRule, saved.passRule);
         if (key === "divisions") return !same(f.divisions, saved.divisions || { enabled: false, cutoffs: [] });
         if (key === "rounding") return !same(f.rounding, saved.rounding);
+        if (key === "marks") return !same(f.marksEntry, saved.marksEntry || { adminOverride: false });
 
         return false;
     }
@@ -236,6 +238,7 @@ export function initGrading(env) {
         S.current = snap.exists() ? snap.data() : null;
 
         S.form = S.current ? clone(S.current) : defaultsFor("marks_percentage");
+        S.form.marksEntry = S.form.marksEntry || { adminOverride: false };
     }
 
     async function api(path, body) {
@@ -321,8 +324,6 @@ export function initGrading(env) {
 
         if (!root || !S.inst) return;
 
-        setActive();
-
         root.innerHTML = "<p class=\"ax-muted\">Loading…</p>";
 
         try {
@@ -382,6 +383,7 @@ export function initGrading(env) {
             : S.section === "components" ? componentsSection()
             : S.section === "pass" ? passSection()
             : S.section === "divisions" ? divisionsSection()
+            : S.section === "marks" ? marksSection()
             : roundingSection();
 
         root.innerHTML = head +
@@ -561,6 +563,24 @@ export function initGrading(env) {
     }
 
 
+    // ---------- section 6: who enters marks ----------
+
+    function marksSection() {
+
+        const f = S.form;
+
+        return "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">Marks entry</h3>" +
+            "<p class=\"ax-muted\">Who enters marks for each subject:</p>" +
+            "<ul class=\"ax-attention\">" +
+            "<li><strong>Subject teacher</strong> enters marks for the subject they teach, in each section they teach it.</li>" +
+            "<li><strong>Class teacher</strong> enters marks for the subjects in their class and section that have no subject teacher.</li>" +
+            "</ul>" +
+            "<label class=\"ax-check\"><input type=\"checkbox\" data-gd=\"madmin\"" + (f.marksEntry && f.marksEntry.adminOverride ? " checked" : "") + dis() +
+            "><span>Admin can also enter or correct marks for any class, section or student</span></label>" +
+            "<p class=\"ax-muted\">Off by default. Turn it on only if the school wants admins to enter marks directly.</p>" +
+            saveBar("marks", "Save marks entry") + "</section>";
+    }
+
     // ---------- saving one section ----------
 
     // Start from the last saved setup and replace only the section being saved
@@ -576,7 +596,8 @@ export function initGrading(env) {
             bands: clone(saved.bands || []),
             passRule: clone(saved.passRule),
             divisions: clone(saved.divisions || { enabled: false, cutoffs: [] }),
-            rounding: clone(saved.rounding)
+            rounding: clone(saved.rounding),
+            marksEntry: clone(saved.marksEntry || { adminOverride: false })
         };
 
         if (key === "type") { p.gradingType = f.gradingType; p.bands = clone(f.bands); }
@@ -584,6 +605,7 @@ export function initGrading(env) {
         if (key === "pass") p.passRule = clone(f.passRule);
         if (key === "divisions") p.divisions = clone(f.divisions);
         if (key === "rounding") p.rounding = clone(f.rounding);
+        if (key === "marks") p.marksEntry = clone(f.marksEntry);
 
         return p;
     }
@@ -614,7 +636,8 @@ export function initGrading(env) {
                     })
                 }
                 : { enabled: false, cutoffs: [] },
-            rounding: { mode: p.rounding.mode, decimals: Number(p.rounding.decimals) || 0 }
+            rounding: { mode: p.rounding.mode, decimals: Number(p.rounding.decimals) || 0 },
+            marksEntry: { adminOverride: !!(p.marksEntry && p.marksEntry.adminOverride) }
         };
     }
 
@@ -672,7 +695,7 @@ export function initGrading(env) {
                 return;
             }
 
-            S.form = { gradingType: value, ...clone(DEFAULTS[value]), components: S.form.components };
+            S.form = { gradingType: value, marksEntry: S.form.marksEntry, ...clone(DEFAULTS[value]), components: S.form.components };
         }
 
         S.error = "";
@@ -704,6 +727,7 @@ export function initGrading(env) {
             }
         }
         else if (kind === "round") f.rounding.mode = el.value;
+        else if (kind === "madmin") f.marksEntry.adminOverride = el.checked;
         else if (kind === "rdec") f.rounding.decimals = Number(el.value);
     }
 

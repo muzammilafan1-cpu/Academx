@@ -238,8 +238,12 @@
 
                 <div class="nav-children">
 
-                    <div class="nav-subitem" data-setnav="grading" onclick="showPage('grading', this)">
-                        Grading
+                    <div class="nav-subitem" data-setnav="rules" onclick="showPage('rules', this)">
+                        Business rules
+                    </div>
+
+                    <div class="nav-subitem" data-setnav="config" onclick="showPage('config', this)">
+                        Configuration
                     </div>
 
                     <!-- Future settings: add one nav-subitem per setting here -->
@@ -431,12 +435,25 @@
             ================================================== -->
 
             <div
-                    id="gradingPage"
+                    id="rulesPage"
                     class="page-card hidden"
             >
 
                 <div
-                        id="gradingRoot"
+                        id="rulesRoot"
+                        class="ax-root ax-root-top"
+                ></div>
+
+            </div>
+
+
+            <div
+                    id="configPage"
+                    class="page-card hidden"
+            >
+
+                <div
+                        id="configRoot"
                         class="ax-root ax-root-top"
                 ></div>
 
