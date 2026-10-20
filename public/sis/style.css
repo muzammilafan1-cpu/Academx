@@ -1227,3 +1227,7 @@ button.ax-stat:hover {
 /* Security: subject list for a teacher */
 .sx-block { margin: 14px 0; }
 .sx-sec { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 6px 0 6px 12px; }
+
+/* Security: subject list for a teacher */
+.sx-block { margin: 14px 0; }
+.sx-sec { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 6px 0 6px 12px; }
