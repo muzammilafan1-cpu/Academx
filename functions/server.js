@@ -42,11 +42,11 @@ app.use("/api", createAcademicRouter(admin));
 const { createGradingRouter } = require("./grading-routes");
 app.use("/api", createGradingRouter(admin));
 
-const { createStaffRouter } = require("./staff-routes");
-app.use("/api", createStaffRouter(admin));
-
 const { createAttendanceRulesRouter } = require("./attendance-rules-routes");
 app.use("/api", createAttendanceRulesRouter(admin));
+
+const { createStaffRouter } = require("./staff-routes");
+app.use("/api", createStaffRouter(admin));
 
 const allowedOrigins = [
   "https://academx.in",
