@@ -113,13 +113,18 @@ function validateGradingPayload(p) {
         divisions = { enabled: true, cutoffs: validateCutoffs(p.divisions.cutoffs, minPercent) };
     }
 
+    // Who enters marks is fixed by the rule (subject teacher for their subject, class teacher for the rest).
+    // Only the optional admin switch is saved here. Off by default.
+    const marksEntry = { adminOverride: !!(p.marksEntry && p.marksEntry.adminOverride) };
+
     return {
         gradingType: p.gradingType,
         components: components,
         bands: bands,
         passRule: passRule,
         divisions: divisions,
-        rounding: rounding
+        rounding: rounding,
+        marksEntry: marksEntry
     };
 }
 
