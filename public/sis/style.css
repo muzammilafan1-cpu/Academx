@@ -1223,3 +1223,7 @@ button.ax-stat:hover {
   .gd-nav { width: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
   .gd-item { width: auto; }
 }
+
+/* Security: subject list for a teacher */
+.sx-block { margin: 14px 0; }
+.sx-sec { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 6px 0 6px 12px; }

@@ -4,12 +4,14 @@ import { initPeople } from "./people.js";
 import { initAttendance } from "./attendance.js";
 import { initAcademic } from "./academic.js";
 import { initGrading } from "./grading.js";
+import { initSecurity } from "./security.js";
 
 import {
     getAuth,
     signInWithEmailAndPassword,
     onAuthStateChanged,
-    signOut
+    signOut,
+    sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 
 import {
@@ -69,6 +71,14 @@ const grading = initGrading({
     auth: auth,
     apiBase: AX_API_BASE,
     toast: function (text, type) { axToast(text, type); }
+});
+
+const security = initSecurity({
+    db: db,
+    auth: auth,
+    apiBase: AX_API_BASE,
+    toast: function (text, type) { axToast(text, type); },
+    sendReset: function (authInstance, email) { return sendPasswordResetEmail(authInstance, email); }
 });
 
 const academic = initAcademic({
@@ -613,6 +623,8 @@ function showPage(
 
     if (page === "grading") grading.open();
 
+    if (page === "security") security.open();
+
     const settingsGroup = document.getElementById("settingsGroup");
     if (settingsGroup) settingsGroup.classList.toggle("open", page === "grading");
 }
@@ -723,6 +735,11 @@ function setApplicationsContext(uid, userData) {
     attendance.setContext(userData.institutionId);
     academic.setContext(userData.institutionId, userData.role);
     grading.setContext(userData.institutionId, userData.role);
+    security.setContext(userData.institutionId, userData.role);
+
+    // Only admins see Security in the menu
+    const securityNav = document.getElementById("securityNav");
+    if (securityNav) securityNav.classList.toggle("hidden", userData.role !== "admin");
 }
 
 function resetApplications() {
@@ -733,6 +750,7 @@ function resetApplications() {
     attendance.reset();
     academic.reset();
     grading.reset();
+    security.reset();
 
     if (appsRoot) {
         appsRoot.innerHTML = "";
