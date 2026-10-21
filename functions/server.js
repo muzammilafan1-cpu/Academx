@@ -45,6 +45,9 @@ app.use("/api", createGradingRouter(admin));
 const { createAttendanceRulesRouter } = require("./attendance-rules-routes");
 app.use("/api", createAttendanceRulesRouter(admin));
 
+const { createMarksRouter } = require("./marks-routes");
+app.use("/api", createMarksRouter(admin));
+
 const { createStaffRouter } = require("./staff-routes");
 app.use("/api", createStaffRouter(admin));
 
