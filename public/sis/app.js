@@ -5,6 +5,7 @@ import { initAttendance } from "./attendance.js";
 import { initAcademic } from "./academic.js";
 import { initRules } from "./rules.js";
 import { initConfig } from "./config.js";
+import { initMarks } from "./marks.js";
 import { initSecurity } from "./security.js";
 
 import {
@@ -82,6 +83,13 @@ const security = initSecurity({
     apiBase: AX_API_BASE,
     toast: function (text, type) { axToast(text, type); },
     sendReset: function (authInstance, email) { return sendPasswordResetEmail(authInstance, email); }
+});
+
+const marks = initMarks({
+    db: db,
+    auth: auth,
+    apiBase: AX_API_BASE,
+    toast: function (text, type) { axToast(text, type); }
 });
 
 const academic = initAcademic({
@@ -466,6 +474,7 @@ function showPage(
         "attendance",
         "applications",
         "academicRecords",
+        "marks",
         "rules",
         "config",
         "security"
@@ -566,6 +575,8 @@ function showPage(
 
         rules: "Business rules",
 
+        marks: "Marks",
+
         config: "Configuration",
 
         attendance: "Attendance",
@@ -630,6 +641,8 @@ function showPage(
     if (page === "rules") rules.open();
 
     if (page === "config") config.open();
+
+    if (page === "marks") marks.open();
 
     if (page === "security") security.open();
 
@@ -742,6 +755,7 @@ function setApplicationsContext(uid, userData) {
     people.setContext(uid, userData);
     attendance.setContext(userData.institutionId);
     academic.setContext(userData.institutionId, userData.role);
+    marks.setContext(userData.institutionId, uid, userData.role, userData.teacherRoles);
     rules.setContext(userData.institutionId, userData.role);
     config.setContext(userData.institutionId);
     security.setContext(userData.institutionId, userData.role);
@@ -758,6 +772,7 @@ function resetApplications() {
     people.reset();
     attendance.reset();
     academic.reset();
+    marks.reset();
     rules.reset();
     config.reset();
     security.reset();

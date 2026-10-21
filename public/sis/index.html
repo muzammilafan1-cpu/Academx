@@ -221,6 +221,17 @@
             </div>
 
 
+            <!-- Marks -->
+
+            <div
+                    class="nav-item"
+                    id="marksNav"
+                    onclick="showPage('marks', this)"
+            >
+                Marks
+            </div>
+
+
             <!-- Settings (sub-navigation). More settings are added as data-setnav items. -->
 
             <div
@@ -228,9 +239,12 @@
                     id="settingsGroup"
             >
 
-                <div class="nav-item" id="settingsNav" onclick="showPage('rules', this)">
+                <div
+                        class="nav-item"
+                        id="settingsNav"
+                        onclick="showPage('grading', this)"
+                >
                     Settings
-
                 </div>
 
                 <div class="nav-children">
@@ -432,6 +446,19 @@
             ================================================== -->
 
             <div
+                    id="marksPage"
+                    class="page-card hidden"
+            >
+
+                <div
+                        id="marksRoot"
+                        class="ax-root ax-root-top"
+                ></div>
+
+            </div>
+
+
+            <div
                     id="rulesPage"
                     class="page-card hidden"
             >
@@ -478,6 +505,7 @@
     </main>
 
 </div>
+
 
 
 <!-- =====================================================
