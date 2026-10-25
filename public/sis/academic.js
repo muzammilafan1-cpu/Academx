@@ -309,10 +309,10 @@ export function initAcademic(env) {
             : "";
 
         const rows = S.exams.map(function (e) {
+            const papers = Array.isArray(e.schedule) ? e.schedule.length : 0;
             return "<tr><td><strong>" + esc(e.name) + "</strong></td><td>" + esc(e.academicYear || "—") +
-                "</td><td>" + esc(scopeText(e)) + "</td><td>" + esc(e.startDate || "—") + "</td><td>" + esc(e.endDate || "—") +
-                "</td><td><div class=\"ax-row-actions\"><button type=\"button\" class=\"ax-btn ax-sm\" data-ac=\"view-exam\" data-id=\"" +
-                esc(e.id) + "\">View</button>" +
+                "</td><td>" + esc(scopeText(e)) + "</td><td>" + papers + "</td><td><div class=\"ax-row-actions\">" +
+                "<button type=\"button\" class=\"ax-btn ax-sm\" data-ac=\"view-exam\" data-id=\"" + esc(e.id) + "\">View</button>" +
                 (S.canManage
                     ? "<button type=\"button\" class=\"ax-btn ax-sm\" data-ac=\"edit-exam\" data-id=\"" + esc(e.id) + "\">Edit</button>" +
                       "<button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-ac=\"delete-exam\" data-id=\"" + esc(e.id) + "\">Delete</button>"
@@ -322,7 +322,7 @@ export function initAcademic(env) {
         return "<section class=\"ax-panel\">" + add +
             (S.exams.length
                 ? "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Exam</th><th>Academic year</th>" +
-                  "<th>Classes</th><th>Period from</th><th>Period to</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>"
+                  "<th>Classes</th><th>Papers with a date</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>"
                 : "<div class=\"ax-empty\"><strong>No exams yet</strong><p class=\"ax-muted\">Add exams such as Term 1 or Unit Test 2.</p></div>") +
             "</section>";
     }
@@ -432,7 +432,6 @@ export function initAcademic(env) {
             "<div class=\"ax-modal-head\"><div><h3>" + esc(e.name) + "</h3><div class=\"ax-muted\">" + esc(e.academicYear || "") +
             "</div></div><button type=\"button\" class=\"ax-icon\" data-ac=\"close\" aria-label=\"Close\">✕</button></div>" +
             "<div class=\"ax-modal-body\"><dl class=\"ax-dl\">" +
-            row("Exam period", esc((e.startDate || "—") + " to " + (e.endDate || "—"))) +
             row("Classes", esc(scopeText(e))) +
             row("Papers with a date", String(papers.length)) +
             row("Papers without a date", String(undated)) +
@@ -462,8 +461,6 @@ export function initAcademic(env) {
         return {
             name: e ? e.name || "" : "",
             academicYear: e ? e.academicYear || "" : "",
-            startDate: e ? e.startDate || "" : "",
-            endDate: e ? e.endDate || "" : "",
             scopeAll: scope.all !== false,
             rows: scope.all === false && Array.isArray(scope.classes)
                 ? scope.classes.map(function (c) { return { class: c.class, sections: (c.sections || []).slice() }; })
@@ -563,9 +560,6 @@ export function initAcademic(env) {
 
                 body = field("Exam name", "acExamName", d.name, " maxlength=\"60\"") +
                     field("Academic year (e.g. 2026-27)", "acYear", d.academicYear, " maxlength=\"7\"") +
-                    "<div class=\"ax-grid\"><label class=\"ax-grow\"><span>Starts</span><input type=\"date\" id=\"acStart\" value=\"" +
-                    esc(d.startDate) + "\"></label><label class=\"ax-grow\"><span>Ends</span><input type=\"date\" id=\"acEnd\" value=\"" +
-                    esc(d.endDate) + "\"></label></div>" +
                     "<h4 class=\"ax-subtitle\">Which classes take this exam?</h4>" +
                     "<label class=\"ax-check\"><input type=\"radio\" name=\"acScope\" data-ac-scope=\"all\"" + (d.scopeAll ? " checked" : "") + "><span>All classes</span></label>" +
                     "<label class=\"ax-check\"><input type=\"radio\" name=\"acScope\" data-ac-scope=\"some\"" + (!d.scopeAll ? " checked" : "") + "><span>Selected classes</span></label>" +
@@ -635,8 +629,6 @@ export function initAcademic(env) {
                     examId: m.id || "",
                     name: m.draft.name,
                     academicYear: m.draft.academicYear,
-                    startDate: m.draft.startDate,
-                    endDate: m.draft.endDate,
                     scope: m.draft.scopeAll
                         ? { all: true }
                         : { all: false, classes: m.draft.rows.map(function (r) { return { class: r.class, sections: r.sections }; }) },
@@ -830,8 +822,6 @@ export function initAcademic(env) {
         else if (el.id === "acCode") d.code = el.value;
         else if (el.id === "acExamName") d.name = el.value;
         else if (el.id === "acYear") d.academicYear = el.value;
-        else if (el.id === "acStart") d.startDate = el.value;
-        else if (el.id === "acEnd") d.endDate = el.value;
     });
 
     modalHost.addEventListener("change", function (event) {
@@ -863,8 +853,6 @@ export function initAcademic(env) {
 
         if (el.id === "acSecM") { d.section = el.value; return; }
 
-        if (el.id === "acStart") d.startDate = el.value;
-        else if (el.id === "acEnd") d.endDate = el.value;
     });
     document.addEventListener("keydown", function (event) {
 
