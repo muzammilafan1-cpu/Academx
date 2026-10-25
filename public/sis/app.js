@@ -448,13 +448,33 @@ async function logout() {
 // FORGOT PASSWORD
 // ============================================================
 
-function forgotPassword(event) {
+async function forgotPassword(event) {
 
     event.preventDefault();
 
-    alert(
-        "Password reset will be connected to Firebase next."
-    );
+    const email = emailInput.value.trim();
+
+    if (!email) {
+        alert("Enter your email first, then press Forgot password.");
+        return;
+    }
+
+    try {
+
+        await sendPasswordResetEmail(auth, email);
+
+    } catch (error) {
+
+        console.error("Password reset error:", error);
+
+        if (error.code === "auth/invalid-email") {
+            alert("Please enter a valid email address.");
+            return;
+        }
+    }
+
+    // Same message whether or not the email is registered, so nobody can check who has an account
+    alert("If this email is registered, a password reset link has been sent.");
 }
 
 
