@@ -336,6 +336,44 @@ function createAcademicHandlers(admin, log) {
             };
         }
 
+        // Paper dates: one per subject in the exam. A paper without a date yet is allowed.
+        const schedule = [];
+
+        const paperRows = Array.isArray(body.schedule) ? body.schedule : [];
+
+        if (paperRows.length > 500) throw new ApiError(400, "invalid-argument", "Too many papers in one exam.");
+
+        const subjectSnap = await db.collection("institutions/" + ctx.institutionId + "/subjects").get();
+
+        for (const row of paperRows) {
+
+            const cls = String(row && row.class || "").trim();
+            const subjectId = validId(row && row.subjectId);
+            const date = typeof row.date === "string" ? row.date.trim() : "";
+
+            if (!subjectId) throw new ApiError(400, "invalid-argument", "A paper has an invalid subject.");
+
+            if (!date) continue;
+
+            if (!validDate(date)) throw new ApiError(400, "invalid-argument", "A paper date isn't a real date.");
+
+            if (date < startDate || date > endDate) {
+                throw new ApiError(400, "invalid-argument", "A paper date (" + date + ") falls outside the exam period.");
+            }
+
+            if (scope.all === false && !scope.classes.some(function (c) { return c.class === cls; })) {
+                throw new ApiError(400, "invalid-argument", "A paper is for a class that isn't in this exam.");
+            }
+
+            const subj = subjectSnap.docs.find(function (d) { return d.id === subjectId; });
+
+            if (!subj || String(subj.data().class) !== cls) {
+                throw new ApiError(400, "invalid-argument", "A subject isn't in class " + cls + ".");
+            }
+
+            schedule.push({ class: cls, subjectId: subjectId, subjectName: subj.data().name || "", date: date });
+        }
+
         const examId = body.examId ? validId(body.examId) : "";
 
         if (body.examId && !examId) throw new ApiError(400, "invalid-argument", "Invalid exam.");
@@ -357,6 +395,7 @@ function createAcademicHandlers(admin, log) {
             name: name,
             academicYear: academicYear,
             scope: scope,
+            schedule: schedule,
             startDate: startDate,
             endDate: endDate,
             updatedAt: FieldValue.serverTimestamp(),
