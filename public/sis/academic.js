@@ -255,43 +255,37 @@ export function initAcademic(env) {
 
         if (!root) return;
 
-        const tabs = [["subjects", "Subjects"], ["exams", "Exams"]].map(function (t) {
-            return "<button type=\"button\" class=\"ax-chip" + (S.tab === t[0] ? " is-on" : "") +
-                "\" data-ac=\"tab\" data-t=\"" + t[0] + "\">" + t[1] + "</button>";
-        }).join("");
+        const isExams = S.tab === "exams";
 
         const head =
-            "<div class=\"ax-head\"><div><h2 class=\"ax-title\">Academic Records</h2>" +
-            "<p class=\"ax-sub\">Subjects for each class, and the exams they are assessed in. " +
-            "Marks entry comes next.</p></div></div>" +
-            "<div class=\"ax-chips\">" + tabs + "</div>";
+            "<div class=\"ax-head\"><div><h2 class=\"ax-title\">" + (isExams ? "Exams" : "Subjects") + "</h2>" +
+            "<p class=\"ax-sub\">" + (isExams
+                ? "Exams and their dates. Marks are entered against these."
+                : "The subjects each class studies, and the sections that take them.") + "</p></div></div>";
 
-        root.innerHTML = head + (S.tab === "exams" ? examsHtml() : subjectsHtml());
+        root.innerHTML = head + (isExams ? examsHtml() : subjectsHtml());
     }
 
     function subjectsHtml() {
 
         if (!S.classes.length) {
-            return emptyPanel("No classes yet", "Add classes under Classes first. Subjects belong to a class.");
+            return "<div class=\"ax-empty\"><strong>No classes yet</strong><p class=\"ax-muted\">Add classes under Classes first.</p></div>";
         }
 
-        const options = S.classes.map(function (c) {
-            return "<option value=\"" + esc(c.class) + "\"" + (c.class === S.cls ? " selected" : "") + ">" +
-                esc(classLabel(c.class)) + "</option>";
-        }).join("");
-
-        const list = S.subjects.filter(function (s) { return String(s.class) === S.cls; });
-
         const add = S.canManage
-            ? "<button type=\"button\" class=\"ax-btn ax-primary\" data-ac=\"add-subject\">+ Add subject</button>"
+            ? "<div class=\"ax-bar\" style=\"margin-top:0;border-top:0;padding-top:0\"><button type=\"button\" class=\"ax-btn ax-primary\" data-ac=\"add-subject\">+ Add subject</button></div>"
             : "";
+
+        const list = S.subjects.slice().sort(function (a, b) {
+            return byNumber(a.class, b.class) || String(a.name).localeCompare(String(b.name));
+        });
 
         const rows = list.map(function (s) {
 
             const secs = Array.isArray(s.sections) && s.sections.length ? s.sections.join(", ") : "—";
 
-            return "<tr><td><strong>" + esc(s.name) + "</strong></td><td>" + esc(s.group || "—") + "</td><td>" +
-                esc(s.code || "—") + "</td><td>" + esc(secs) + "</td><td>" +
+            return "<tr><td>" + esc(classLabel(s.class)) + "</td><td>" + esc(secs) + "</td><td><strong>" + esc(s.name) +
+                "</strong></td><td>" + esc(s.code || "—") + "</td><td>" +
                 (S.canManage
                     ? "<div class=\"ax-row-actions\"><button type=\"button\" class=\"ax-btn ax-sm\" data-ac=\"edit-subject\" data-id=\"" +
                       esc(s.id) + "\">Edit</button><button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-ac=\"delete-subject\" data-id=\"" +
@@ -299,15 +293,12 @@ export function initAcademic(env) {
                     : "") + "</td></tr>";
         }).join("");
 
-        return "<section class=\"ax-panel\"><div class=\"ax-grid\">" +
-            "<label class=\"ax-grow\"><span>Class</span><select id=\"acClass\">" + options + "</select></label>" +
-            "<div style=\"align-self:flex-end;margin-bottom:14px\">" + add + "</div></div>" +
+        return "<section class=\"ax-panel\">" + add +
             (list.length
-                ? "<p class=\"ax-muted\">Subjects taught in " + esc(classLabel(S.cls)) + ".</p>" +
-                  "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Subject</th><th>Group or stream</th>" +
-                  "<th>Code</th><th>Taught in sections</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>"
-                : "<div class=\"ax-empty\"><strong>No subjects for " + esc(classLabel(S.cls)) + " yet</strong>" +
-                  "<p class=\"ax-muted\">Click + Add subject, choose the class and the sections that take it, then give the subject a name.</p></div>") +
+                ? "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Class</th><th>Section</th>" +
+                  "<th>Subject</th><th>Code</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>"
+                : "<div class=\"ax-empty\"><strong>No subjects yet</strong>" +
+                  "<p class=\"ax-muted\">Click + Add subject, then choose the class, the section or all sections, and the subject name.</p></div>") +
             "</section>";
     }
 
@@ -344,6 +335,25 @@ export function initAcademic(env) {
             esc(value) + "\"" + (extra || "") + "></label>";
     }
 
+    // A saved subject becomes the form values: all sections, one section, or a custom list
+    function subjectDraft(subj) {
+        const cls = S.classes.find(function (c) { return c.class === subj.class; }) || { sections: [] };
+        const taught = Array.isArray(subj.sections) ? subj.sections.slice() : [];
+        const sameSet = cls.sections.length === taught.length && cls.sections.every(function (x) { return taught.includes(x); });
+        let section = "__all";
+        if (!sameSet && taught.length === 1) section = taught[0];
+        if (!sameSet && taught.length > 1) section = "__custom";
+        return { class: subj.class, section: section, customSections: taught, name: subj.name || "", code: subj.code || "" };
+    }
+
+    // The sections a subject is taught in, from the form values
+    function sectionsFromDraft(d) {
+        const cls = S.classes.find(function (c) { return c.class === d.class; }) || { sections: [] };
+        if (d.section === "__all") return cls.sections.slice();
+        if (d.section === "__custom") return (d.customSections || []).slice();
+        return [d.section];
+    }
+
     function renderModal() {
 
         const m = S.modal;
@@ -368,20 +378,20 @@ export function initAcademic(env) {
                         esc(classLabel(c.class)) + "</option>";
                 }).join("");
 
-                const sectionBoxes = cls.sections.length
-                    ? cls.sections.map(function (sec) {
-                        return "<label class=\"ax-check\"><input type=\"checkbox\" data-acs=\"sec\" value=\"" + esc(sec) + "\"" +
-                            (d.sections.includes(sec) ? " checked" : "") + "><span>Section " + esc(sec) + "</span></label>";
-                    }).join("")
-                    : "<p class=\"ax-muted\">This class has no sections yet. Add sections under Classes first.</p>";
+                const secOptions =
+                    "<option value=\"__all\"" + (d.section === "__all" ? " selected" : "") + ">All sections</option>" +
+                    cls.sections.map(function (sec) {
+                        return "<option value=\"" + esc(sec) + "\"" + (d.section === sec ? " selected" : "") + ">Section " + esc(sec) + "</option>";
+                    }).join("") +
+                    (d.section === "__custom"
+                        ? "<option value=\"__custom\" selected>Sections " + esc((d.customSections || []).join(", ")) + "</option>"
+                        : "");
 
                 body =
                     "<label><span>Class</span><select id=\"acClassM\">" + classOptions + "</select></label>" +
-                    "<p class=\"ax-muted\">Tick the sections this subject is taught in.</p>" +
-                    "<div class=\"sx-checks\">" + sectionBoxes + "</div>" +
-                    field("Subject name", "acName", d.name, " maxlength=\"60\" placeholder=\"e.g. English, Physics\"") +
-                    field("Group or stream (optional)", "acGroup", d.group, " maxlength=\"60\" placeholder=\"e.g. Science, Commerce, Core\"") +
-                    field("Short code (optional)", "acCode", d.code, " maxlength=\"12\" placeholder=\"e.g. ENG\"");
+                    "<label><span>Section</span><select id=\"acSecM\">" + secOptions + "</select></label>" +
+                    field("Subject", "acName", d.name, " maxlength=\"60\" placeholder=\"e.g. English, Physics\"") +
+                    field("Subject code (optional)", "acCode", d.code, " maxlength=\"12\" placeholder=\"e.g. ENG\"");
 
                 title = m.id ? "Edit subject" : "Add subject";
 
@@ -447,8 +457,7 @@ export function initAcademic(env) {
                     subjectId: m.id || "",
                     name: m.draft.name,
                     code: m.draft.code,
-                    group: m.draft.group,
-                    sections: m.draft.sections
+                    sections: sectionsFromDraft(m.draft)
                 });
 
                 toast("Subject saved.", "ok");
@@ -534,7 +543,7 @@ export function initAcademic(env) {
 
             if (act === "add-subject") {
 
-                S.modal = { type: "subject", id: "", error: "", draft: { class: S.cls, sections: ((S.classes.find(function (c) { return c.class === S.cls; }) || { sections: [] }).sections || []).slice(), name: "", group: "", code: "" } };
+                S.modal = { type: "subject", id: "", error: "", draft: { class: (S.classes[0] || { class: "" }).class, section: "__all", customSections: [], name: "", code: "" } };
 
                 return renderModal();
             }
@@ -545,7 +554,7 @@ export function initAcademic(env) {
 
                 if (!s) return;
 
-                S.modal = { type: "subject", id: id, error: "", draft: { class: s.class, sections: Array.isArray(s.sections) ? s.sections.slice() : [], name: s.name || "", group: s.group || "", code: s.code || "" } };
+                S.modal = { type: "subject", id: id, error: "", draft: subjectDraft(s) };
 
                 return renderModal();
             }
@@ -616,7 +625,6 @@ export function initAcademic(env) {
         if (!d) return;
 
         if (el.id === "acName") d.name = el.value;
-        else if (el.id === "acGroup") d.group = el.value;
         else if (el.id === "acCode") d.code = el.value;
         else if (el.id === "acExamName") d.name = el.value;
         else if (el.id === "acYear") d.academicYear = el.value;
@@ -633,13 +641,13 @@ export function initAcademic(env) {
 
         if (el.id === "acClassM") {
             d.class = el.value;
-            d.sections = ((S.classes.find(function (c) { return c.class === d.class; }) || { sections: [] }).sections || []).slice();
+            d.section = "__all";
+            d.customSections = [];
             return renderModal();
         }
 
-        if (el.dataset.acs === "sec") {
-            if (el.checked) { if (!d.sections.includes(el.value)) d.sections.push(el.value); }
-            else d.sections = d.sections.filter(function (x) { return x !== el.value; });
+        if (el.id === "acSecM") {
+            d.section = el.value;
             return;
         }
 
