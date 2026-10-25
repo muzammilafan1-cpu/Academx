@@ -281,17 +281,6 @@ function createAcademicHandlers(admin, log) {
             throw new ApiError(400, "invalid-argument", "The academic year must look like 2026-27.");
         }
 
-        const startDate = typeof body.startDate === "string" ? body.startDate.trim() : "";
-        const endDate = typeof body.endDate === "string" ? body.endDate.trim() : "";
-
-        if (!validDate(startDate) || !validDate(endDate)) {
-            throw new ApiError(400, "invalid-argument", "Enter valid start and end dates.");
-        }
-
-        if (startDate > endDate) {
-            throw new ApiError(400, "invalid-argument", "The end date can't be before the start date.");
-        }
-
         // Which classes and sections take this exam: all classes, or chosen classes with all or some sections
         let scope = { all: true };
 
@@ -357,10 +346,6 @@ function createAcademicHandlers(admin, log) {
 
             if (!validDate(date)) throw new ApiError(400, "invalid-argument", "A paper date isn't a real date.");
 
-            if (date < startDate || date > endDate) {
-                throw new ApiError(400, "invalid-argument", "A paper date (" + date + ") falls outside the exam period.");
-            }
-
             if (scope.all === false && !scope.classes.some(function (c) { return c.class === cls; })) {
                 throw new ApiError(400, "invalid-argument", "A paper is for a class that isn't in this exam.");
             }
@@ -396,8 +381,6 @@ function createAcademicHandlers(admin, log) {
             academicYear: academicYear,
             scope: scope,
             schedule: schedule,
-            startDate: startDate,
-            endDate: endDate,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: ctx.uid
         };
