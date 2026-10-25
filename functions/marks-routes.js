@@ -157,7 +157,12 @@ function createMarksHandlers(admin, log) {
         const gradingSnap = await db.doc("gradingSettings/" + inst).get();
         if (!gradingSnap.exists) bad("Set up Grading rules first (Settings > Business rules > Grading rules).");
         const grading = gradingSnap.data();
-        const components = Array.isArray(grading.components) ? grading.components : [];
+        // The exam's own marks parts; older exams fall back to the grading defaults
+        const examParts = Array.isArray(examSnap.data().components) && examSnap.data().components.length
+            ? examSnap.data().components
+            : (Array.isArray(grading.components) ? grading.components : []);
+
+        const components = examParts;
         const componentNames = components.map(function (c) { return c.name; });
 
         // ---- who may enter marks for this subject in this section ----
@@ -200,7 +205,7 @@ function createMarksHandlers(admin, log) {
         if (existing.exists && existing.data().maxes) {
             maxes = { ...existing.data().maxes };
         } else {
-            components.forEach(function (c) { maxes[c.name] = Number(c.weight); });
+            components.forEach(function (c) { maxes[c.name] = Number(c.max || c.weight); });
         }
 
         if (body.maxes && typeof body.maxes === "object") {

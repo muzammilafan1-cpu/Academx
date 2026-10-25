@@ -359,6 +359,48 @@ function createAcademicHandlers(admin, log) {
             schedule.push({ class: cls, subjectId: subjectId, subjectName: subj.data().name || "", date: date });
         }
 
+        // Marks parts for this exam: each has a name, a maximum and a weight. Weights add up to 100.
+        const partsIn = Array.isArray(body.components) ? body.components : [];
+
+        if (!partsIn.length || partsIn.length > 6) {
+            throw new ApiError(400, "invalid-argument", "Add between 1 and 6 marks parts for this exam.");
+        }
+
+        const components = partsIn.map(function (c) {
+
+            const name = typeof c.name === "string" ? c.name.trim() : "";
+
+            if (!NAME_PATTERN.test(name)) {
+                throw new ApiError(400, "invalid-argument", "Each marks part needs a name of up to 60 characters.");
+            }
+
+            const max = Number(c.max);
+
+            if (!Number.isFinite(max) || max <= 0 || max > 1000) {
+                throw new ApiError(400, "invalid-argument", "Each part's maximum must be a number above 0 and up to 1000.");
+            }
+
+            const weight = Number(c.weight);
+
+            if (!Number.isInteger(weight) || weight < 1 || weight > 100) {
+                throw new ApiError(400, "invalid-argument", "Each part's weight must be a whole number from 1 to 100.");
+            }
+
+            return { name: name, max: max, weight: weight };
+        });
+
+        const partNames = components.map(function (c) { return c.name.toLowerCase(); });
+
+        if (new Set(partNames).size !== partNames.length) {
+            throw new ApiError(400, "invalid-argument", "Marks part names must be different.");
+        }
+
+        const weightTotal = components.reduce(function (n, c) { return n + c.weight; }, 0);
+
+        if (weightTotal !== 100) {
+            throw new ApiError(400, "invalid-argument", "The weights of the marks parts must add up to 100. They add up to " + weightTotal + ".");
+        }
+
         const examId = body.examId ? validId(body.examId) : "";
 
         if (body.examId && !examId) throw new ApiError(400, "invalid-argument", "Invalid exam.");
@@ -381,6 +423,7 @@ function createAcademicHandlers(admin, log) {
             academicYear: academicYear,
             scope: scope,
             schedule: schedule,
+            components: components,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: ctx.uid
         };
