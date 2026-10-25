@@ -138,6 +138,31 @@ function createAcademicHandlers(admin, log) {
             throw new ApiError(400, "invalid-argument", "That class isn't set up under Classes.");
         }
 
+        // The sections that teach this subject, and an optional group or stream
+        const classSnap = await db.collection("classes").where("institutionId", "==", ctx.institutionId).get();
+        const classDoc = classSnap.docs.find(function (d) { return String(d.data().class) === className; });
+        const classSections = classDoc && Array.isArray(classDoc.data().sections) ? classDoc.data().sections.map(String) : [];
+
+        const sectionsIn = Array.isArray(body.sections) ? body.sections.map(function (x) { return String(x).trim(); }) : [];
+        const sections = [...new Set(sectionsIn)];
+
+        if (!sections.length) {
+            throw new ApiError(400, "invalid-argument", "Choose at least one section that teaches this subject.");
+        }
+
+        for (const sec of sections) {
+            if (!classSections.includes(sec)) {
+                throw new ApiError(400, "invalid-argument", "Section " + sec + " doesn't exist in class " + className + ".");
+            }
+        }
+
+        const group = typeof body.group === "string" ? body.group.trim() : "";
+
+        if (group && !NAME_PATTERN.test(group)) {
+            throw new ApiError(400, "invalid-argument",
+                "The group or stream can be up to 60 characters: letters, numbers, spaces, . ( ) & ' -.");
+        }
+
         const name = typeof body.name === "string" ? body.name.trim() : "";
 
         if (!NAME_PATTERN.test(name)) {
@@ -184,6 +209,8 @@ function createAcademicHandlers(admin, log) {
             await ref.set({
                 name: name,
                 code: code,
+                sections: sections,
+                group: group,
                 updatedAt: FieldValue.serverTimestamp(),
                 updatedBy: ctx.uid
             }, { merge: true });
@@ -198,6 +225,8 @@ function createAcademicHandlers(admin, log) {
             class: className,
             name: name,
             code: code,
+            sections: sections,
+            group: group,
             createdAt: FieldValue.serverTimestamp(),
             createdBy: ctx.uid,
             updatedAt: FieldValue.serverTimestamp(),
