@@ -308,29 +308,21 @@ export function initAcademic(env) {
             ? "<div class=\"ax-bar\" style=\"margin-top:0;border-top:0;padding-top:0\"><button type=\"button\" class=\"ax-btn ax-primary\" data-ac=\"add-exam\">+ Add exam</button></div>"
             : "";
 
-        const scopeText = function (e) {
-            if (!e.scope || e.scope.all !== false) return "All classes";
-            return (e.scope.classes || []).map(function (c) {
-                const all = (S.classes.find(function (x) { return x.class === c.class; }) || { sections: [] }).sections;
-                const same = all.length === (c.sections || []).length;
-                return classLabel(c.class) + " (" + (same ? "all sections" : (c.sections || []).join(", ")) + ")";
-            }).join("; ");
-        };
-
         const rows = S.exams.map(function (e) {
             return "<tr><td><strong>" + esc(e.name) + "</strong></td><td>" + esc(e.academicYear || "—") +
-                "</td><td>" + esc(scopeText(e)) + "</td><td>" + esc(e.startDate || "—") + "</td><td>" + esc(e.endDate || "—") + "</td><td>" +
+                "</td><td>" + esc(scopeText(e)) + "</td><td>" + esc(e.startDate || "—") + "</td><td>" + esc(e.endDate || "—") +
+                "</td><td><div class=\"ax-row-actions\"><button type=\"button\" class=\"ax-btn ax-sm\" data-ac=\"view-exam\" data-id=\"" +
+                esc(e.id) + "\">View</button>" +
                 (S.canManage
-                    ? "<div class=\"ax-row-actions\"><button type=\"button\" class=\"ax-btn ax-sm\" data-ac=\"edit-exam\" data-id=\"" +
-                      esc(e.id) + "\">Edit</button><button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-ac=\"delete-exam\" data-id=\"" +
-                      esc(e.id) + "\">Delete</button></div>"
-                    : "") + "</td></tr>";
+                    ? "<button type=\"button\" class=\"ax-btn ax-sm\" data-ac=\"edit-exam\" data-id=\"" + esc(e.id) + "\">Edit</button>" +
+                      "<button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-ac=\"delete-exam\" data-id=\"" + esc(e.id) + "\">Delete</button>"
+                    : "") + "</div></td></tr>";
         }).join("");
 
         return "<section class=\"ax-panel\">" + add +
             (S.exams.length
                 ? "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Exam</th><th>Academic year</th>" +
-                  "<th>Classes</th><th>Starts</th><th>Ends</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>"
+                  "<th>Classes</th><th>Period from</th><th>Period to</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>"
                 : "<div class=\"ax-empty\"><strong>No exams yet</strong><p class=\"ax-muted\">Add exams such as Term 1 or Unit Test 2.</p></div>") +
             "</section>";
     }
@@ -363,10 +355,110 @@ export function initAcademic(env) {
         return [d.section];
     }
 
+    function scopeText(e) {
+        if (!e.scope || e.scope.all !== false) return "All classes";
+        return (e.scope.classes || []).map(function (c) {
+            const all = (S.classes.find(function (x) { return x.class === c.class; }) || { sections: [] }).sections;
+            const same = all.length === (c.sections || []).length;
+            return classLabel(c.class) + " (" + (same ? "all sections" : (c.sections || []).join(", ")) + ")";
+        }).join("; ");
+    }
+
+    // Weekday name, with Sundays flagged so the admin can check them
+    function dayLabel(date) {
+        if (!date) return "—";
+        const d = new Date(date + "T00:00:00");
+        if (isNaN(d)) return "—";
+        const name = d.toLocaleDateString(undefined, { weekday: "long" });
+        return d.getDay() === 0 ? name + " (Sunday: check)" : name;
+    }
+
+    // Every subject in the exam's classes, with the sections it is taught in
+    function examPaperRows(d) {
+        const classes = d.scopeAll
+            ? S.classes.map(function (c) { return { class: c.class, sections: c.sections }; })
+            : d.rows;
+        const rows = [];
+        classes.forEach(function (c) {
+            S.subjects.filter(function (s) { return s.class === c.class; }).forEach(function (s) {
+                const taught = Array.isArray(s.sections) && s.sections.length ? s.sections : null;
+                const applies = !taught || !c.sections || c.sections.length === 0 || taught.some(function (x) { return c.sections.includes(x); });
+                if (applies) rows.push({ class: c.class, subjectId: s.id, subjectName: s.name });
+            });
+        });
+        return rows;
+    }
+
+    function examPapersHtml(d) {
+
+        const rows = examPaperRows(d);
+
+        if (!rows.length) {
+            return "<p class=\"ax-muted\">These classes have no subjects yet. Add subjects under Academic Records > Subjects, then set the paper dates.</p>";
+        }
+
+        return "<h4 class=\"ax-subtitle\">Paper dates</h4>" +
+            "<p class=\"ax-muted\">Set the date of each subject's paper. Leave one empty if it isn't fixed yet.</p>" +
+            "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Class</th><th>Subject</th><th>Paper date</th><th>Day</th></tr></thead><tbody>" +
+            rows.map(function (r) {
+                const key = r.class + "|" + r.subjectId;
+                const date = d.schedule[key] || "";
+                return "<tr><td>" + esc(classLabel(r.class)) + "</td><td>" + esc(r.subjectName) + "</td><td>" +
+                    "<input type=\"date\" data-ac-paper=\"" + esc(key) + "\" value=\"" + esc(date) + "\"></td><td><span data-ac-day=\"" +
+                    esc(key) + "\">" + esc(dayLabel(date)) + "</span></td></tr>";
+            }).join("") + "</tbody></table></div>";
+    }
+
+    // The full record of one exam, with its papers in date order
+    function examViewHtml(m) {
+
+        const e = S.exams.find(function (x) { return x.id === m.id; });
+
+        if (!e) return "";
+
+        const papers = (Array.isArray(e.schedule) ? e.schedule : []).slice().sort(function (a, b) {
+            return String(a.date).localeCompare(String(b.date));
+        });
+
+        const undated = examPaperRows(examDraft(e)).filter(function (r) {
+            return !papers.some(function (p) { return p.class === r.class && p.subjectId === r.subjectId; });
+        }).length;
+
+        const row = function (label, value) {
+            return "<div class=\"ax-dl-row\"><dt>" + esc(label) + "</dt><dd>" + value + "</dd></div>";
+        };
+
+        return "<div class=\"ax-backdrop\" data-ac=\"backdrop\"><div class=\"ax-modal\" role=\"dialog\" aria-modal=\"true\">" +
+            "<div class=\"ax-modal-head\"><div><h3>" + esc(e.name) + "</h3><div class=\"ax-muted\">" + esc(e.academicYear || "") +
+            "</div></div><button type=\"button\" class=\"ax-icon\" data-ac=\"close\" aria-label=\"Close\">✕</button></div>" +
+            "<div class=\"ax-modal-body\"><dl class=\"ax-dl\">" +
+            row("Exam period", esc((e.startDate || "—") + " to " + (e.endDate || "—"))) +
+            row("Classes", esc(scopeText(e))) +
+            row("Papers with a date", String(papers.length)) +
+            row("Papers without a date", String(undated)) +
+            "</dl>" +
+            "<h4 class=\"ax-subtitle\">Paper timetable</h4>" +
+            (papers.length
+                ? "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Date</th><th>Day</th><th>Class</th><th>Subject</th></tr></thead><tbody>" +
+                  papers.map(function (p) {
+                      return "<tr><td>" + esc(p.date) + "</td><td>" + esc(dayLabel(p.date)) + "</td><td>" + esc(classLabel(p.class)) +
+                          "</td><td>" + esc(p.subjectName) + "</td></tr>";
+                  }).join("") + "</tbody></table></div>"
+                : "<p class=\"ax-muted\">No paper dates have been set yet.</p>") +
+            "<div class=\"ax-bar ax-bar-modal\">" +
+            (S.canManage ? "<button type=\"button\" class=\"ax-btn ax-primary\" data-ac=\"edit-exam\" data-id=\"" + esc(e.id) + "\">Edit exam</button>" : "") +
+            "<button type=\"button\" class=\"ax-btn\" data-ac=\"close\">Close</button></div>" +
+            "</div></div></div>";
+    }
+
     // The exam form values: all classes, or the chosen classes and their sections
     function examDraft(e) {
         const first = S.classes[0] || { class: "" };
         const scope = e && e.scope ? e.scope : { all: true };
+        const schedule = {};
+        (e && Array.isArray(e.schedule) ? e.schedule : []).forEach(function (p) {
+            schedule[p.class + "|" + p.subjectId] = p.date;
+        });
         return {
             name: e ? e.name || "" : "",
             academicYear: e ? e.academicYear || "" : "",
@@ -377,7 +469,8 @@ export function initAcademic(env) {
                 ? scope.classes.map(function (c) { return { class: c.class, sections: (c.sections || []).slice() }; })
                 : [],
             pickClass: first.class,
-            pickSection: "__all"
+            pickSection: "__all",
+            schedule: schedule
         };
     }
 
@@ -410,11 +503,24 @@ export function initAcademic(env) {
             list;
     }
 
+    function openExamEdit(id) {
+        const e = S.exams.find(function (x) { return x.id === id; });
+        if (!e) return;
+        S.modal = { type: "exam", id: id, error: "", draft: examDraft(e) };
+        renderModal();
+    }
+
     function renderModal() {
 
         const m = S.modal;
 
         let html = "";
+
+        if (m && m.type === "examView") {
+            modalHost.innerHTML = "<div class=\"ax-root ax-root-top\">" + examViewHtml(m) + "</div>";
+            document.body.classList.add("ax-noscroll");
+            return;
+        }
 
         if (m) {
 
@@ -463,7 +569,7 @@ export function initAcademic(env) {
                     "<h4 class=\"ax-subtitle\">Which classes take this exam?</h4>" +
                     "<label class=\"ax-check\"><input type=\"radio\" name=\"acScope\" data-ac-scope=\"all\"" + (d.scopeAll ? " checked" : "") + "><span>All classes</span></label>" +
                     "<label class=\"ax-check\"><input type=\"radio\" name=\"acScope\" data-ac-scope=\"some\"" + (!d.scopeAll ? " checked" : "") + "><span>Selected classes</span></label>" +
-                    (d.scopeAll ? "" : examClassPicker(d));
+                    (d.scopeAll ? "" : examClassPicker(d)) + examPapersHtml(d);
 
                 title = m.id ? "Edit exam" : "Add exam";
             }
@@ -533,7 +639,10 @@ export function initAcademic(env) {
                     endDate: m.draft.endDate,
                     scope: m.draft.scopeAll
                         ? { all: true }
-                        : { all: false, classes: m.draft.rows.map(function (r) { return { class: r.class, sections: r.sections }; }) }
+                        : { all: false, classes: m.draft.rows.map(function (r) { return { class: r.class, sections: r.sections }; }) },
+                    schedule: examPaperRows(m.draft).map(function (r) {
+                        return { class: r.class, subjectId: r.subjectId, date: m.draft.schedule[r.class + "|" + r.subjectId] || "" };
+                    })
                 });
 
                 toast("Exam saved.", "ok");
@@ -646,6 +755,7 @@ export function initAcademic(env) {
                 return renderModal();
             }
 
+            if (act === "view-exam") { S.modal = { type: "examView", id: id }; return renderModal(); }
             if (act === "delete-exam") return remove("exam", id);
         });
 
@@ -678,6 +788,8 @@ export function initAcademic(env) {
         if (act === "close" && !S.busy) return closeModal();
 
         if (act === "save") return save();
+
+        if (act === "edit-exam") return openExamEdit(t.dataset.id);
 
         const d = S.modal && S.modal.type === "exam" ? S.modal.draft : null;
 
@@ -728,6 +840,13 @@ export function initAcademic(env) {
         const d = S.modal && S.modal.draft;
 
         if (!d) return;
+
+        if (el.dataset.acPaper) {
+            d.schedule[el.dataset.acPaper] = el.value;
+            const tag = modalHost.querySelector("[data-ac-day=\"" + el.dataset.acPaper + "\"]");
+            if (tag) tag.textContent = dayLabel(el.value);
+            return;
+        }
 
         if (el.dataset.acScope === "all") { d.scopeAll = true; return renderModal(); }
         if (el.dataset.acScope === "some") { d.scopeAll = false; return renderModal(); }
