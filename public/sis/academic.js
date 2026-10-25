@@ -10,6 +10,8 @@
 
 import {
     collection,
+    doc,
+    getDoc,
     getDocs,
     query,
     where
@@ -42,6 +44,7 @@ export function initAcademic(env) {
             cls: "",
             subjects: [],
             exams: [],
+            grading: null,
             modal: null,         // { type: "subject" | "exam", id, draft, error }
             busy: false
         };
@@ -218,6 +221,11 @@ export function initAcademic(env) {
 
     // ---------- page ----------
 
+    async function loadGrading() {
+        const snap = await getDoc(doc(db, "gradingSettings/" + S.inst));
+        S.grading = snap.exists() ? snap.data() : null;
+    }
+
     async function open(tab) {
 
         if (tab) S.tab = tab;
@@ -227,7 +235,7 @@ export function initAcademic(env) {
 
         try {
 
-            await Promise.all([loadClasses(), loadSubjects(), loadExams()]);
+            await Promise.all([loadClasses(), loadSubjects(), loadExams(), loadGrading()]);
 
         } catch (error) {
 
@@ -436,7 +444,7 @@ export function initAcademic(env) {
             row("Papers with a date", String(papers.length)) +
             row("Papers without a date", String(undated)) +
             "</dl>" +
-            "<h4 class=\"ax-subtitle\">Paper timetable</h4>" +
+            examComponentsTable(e) + "<h4 class=\"ax-subtitle\">Paper timetable</h4>" +
             (papers.length
                 ? "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Date</th><th>Day</th><th>Class</th><th>Subject</th></tr></thead><tbody>" +
                   papers.map(function (p) {
@@ -467,7 +475,10 @@ export function initAcademic(env) {
                 : [],
             pickClass: first.class,
             pickSection: "__all",
-            schedule: schedule
+            schedule: schedule,
+            components: e && Array.isArray(e.components) && e.components.length
+                ? e.components.map(function (c) { return { name: c.name, max: c.max, weight: c.weight }; })
+                : defaultComponents()
         };
     }
 
@@ -505,6 +516,43 @@ export function initAcademic(env) {
         if (!e) return;
         S.modal = { type: "exam", id: id, error: "", draft: examDraft(e) };
         renderModal();
+    }
+
+    // New exams start with the school's grading parts; each exam can change them
+    function defaultComponents() {
+        const list = S.grading && Array.isArray(S.grading.components) ? S.grading.components : [];
+        return list.map(function (c) { return { name: c.name, max: Number(c.weight), weight: Number(c.weight) }; });
+    }
+
+    function examComponentsHtml(d) {
+
+        const total = d.components.reduce(function (n, c) { return n + (Number(c.weight) || 0); }, 0);
+
+        const rows = d.components.map(function (c, i) {
+            return "<tr><td><input type=\"text\" data-acc-i=\"" + i + "\" data-acc-k=\"name\" value=\"" + esc(c.name) + "\" maxlength=\"60\"></td>" +
+                "<td><input type=\"number\" data-acc-i=\"" + i + "\" data-acc-k=\"max\" value=\"" + esc(c.max) + "\" min=\"1\" max=\"1000\" step=\"any\" style=\"width:90px\"></td>" +
+                "<td><input type=\"number\" data-acc-i=\"" + i + "\" data-acc-k=\"weight\" value=\"" + esc(c.weight) + "\" min=\"1\" max=\"100\" step=\"1\" style=\"width:90px\"></td>" +
+                "<td><button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-ac=\"rm-comp\" data-i=\"" + i + "\">Remove</button></td></tr>";
+        }).join("");
+
+        return "<h4 class=\"ax-subtitle\">Marks in this exam</h4>" +
+            "<p class=\"ax-muted\">The parts of this exam, the most each part is out of, and how much it counts. Weights must add up to 100. " +
+            "Current total: <strong>" + total + "</strong>.</p>" +
+            "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Part</th><th>Out of</th><th>Weight %</th><th></th></tr></thead><tbody>" +
+            rows + "</tbody></table></div>" +
+            "<div class=\"ax-bar\" style=\"margin-top:0;border-top:0;padding-top:0\"><button type=\"button\" class=\"ax-btn\" data-ac=\"add-comp\">Add part</button></div>";
+    }
+
+    function examComponentsTable(e) {
+
+        const list = Array.isArray(e.components) && e.components.length ? e.components : [];
+
+        if (!list.length) return "<p class=\"ax-muted\">No marks parts were set for this exam.</p>";
+
+        return "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Part</th><th>Out of</th><th>Weight %</th></tr></thead><tbody>" +
+            list.map(function (c) {
+                return "<tr><td>" + esc(c.name) + "</td><td>" + esc(c.max) + "</td><td>" + esc(c.weight) + "</td></tr>";
+            }).join("") + "</tbody></table></div>";
     }
 
     function renderModal() {
@@ -563,7 +611,7 @@ export function initAcademic(env) {
                     "<h4 class=\"ax-subtitle\">Which classes take this exam?</h4>" +
                     "<label class=\"ax-check\"><input type=\"radio\" name=\"acScope\" data-ac-scope=\"all\"" + (d.scopeAll ? " checked" : "") + "><span>All classes</span></label>" +
                     "<label class=\"ax-check\"><input type=\"radio\" name=\"acScope\" data-ac-scope=\"some\"" + (!d.scopeAll ? " checked" : "") + "><span>Selected classes</span></label>" +
-                    (d.scopeAll ? "" : examClassPicker(d)) + examPapersHtml(d);
+                    (d.scopeAll ? "" : examClassPicker(d)) + examComponentsHtml(d) + examPapersHtml(d);
 
                 title = m.id ? "Edit exam" : "Add exam";
             }
@@ -629,6 +677,7 @@ export function initAcademic(env) {
                     examId: m.id || "",
                     name: m.draft.name,
                     academicYear: m.draft.academicYear,
+                    components: m.draft.components.map(function (c) { return { name: c.name, max: Number(c.max), weight: Number(c.weight) }; }),
                     scope: m.draft.scopeAll
                         ? { all: true }
                         : { all: false, classes: m.draft.rows.map(function (r) { return { class: r.class, sections: r.sections }; }) },
@@ -781,6 +830,14 @@ export function initAcademic(env) {
 
         if (act === "save") return save();
 
+        if (act === "add-comp" || act === "rm-comp") {
+            const dd = S.modal && S.modal.draft;
+            if (!dd) return;
+            if (act === "add-comp") dd.components.push({ name: "Part " + (dd.components.length + 1), max: 10, weight: 0 });
+            else dd.components.splice(Number(t.dataset.i), 1);
+            return renderModal();
+        }
+
         if (act === "edit-exam") return openExamEdit(t.dataset.id);
 
         const d = S.modal && S.modal.type === "exam" ? S.modal.draft : null;
@@ -817,6 +874,11 @@ export function initAcademic(env) {
         const d = S.modal && S.modal.draft;
 
         if (!d) return;
+
+        if (el.dataset.accK !== undefined) {
+            d.components[Number(el.dataset.accI)][el.dataset.accK] = el.value;
+            return;
+        }
 
         if (el.id === "acName") d.name = el.value;
         else if (el.id === "acCode") d.code = el.value;

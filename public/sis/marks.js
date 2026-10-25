@@ -192,14 +192,17 @@ export function initMarks(env) {
         S.mark = snap.exists() ? snap.data() : null;
     }
 
+    // The selected exam's own marks parts; older exams use the grading defaults
     function components() {
+        const e = S.exams.find(function (x) { return x.id === S.exam; });
+        if (e && Array.isArray(e.components) && e.components.length) return e.components;
         return S.grading && Array.isArray(S.grading.components) ? S.grading.components : [];
     }
 
     function maxFor(name) {
         if (S.mark && S.mark.maxes && S.mark.maxes[name] !== undefined) return Number(S.mark.maxes[name]);
         const c = components().find(function (x) { return x.name === name; });
-        return c ? Number(c.weight) : 0;
+        return c ? Number(c.max || c.weight) : 0;
     }
 
 
