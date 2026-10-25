@@ -91,6 +91,15 @@ export function initMarks(env) {
         if (root) root.innerHTML = "";
     }
 
+    // An exam applies if it covers all classes, or includes this class and section
+    function examApplies(e) {
+        const scope = e.scope;
+        if (!scope || scope.all !== false) return true;
+        return (scope.classes || []).some(function (c) {
+            return c.class === S.cls && (c.sections || []).includes(S.sec);
+        });
+    }
+
     function adminMarksOn() {
         return !!(S.grading && S.grading.marksEntry && S.grading.marksEntry.adminOverride);
     }
@@ -304,6 +313,13 @@ export function initMarks(env) {
 
     async function chooseSubject() {
 
+        const applicable = S.exams.filter(examApplies);
+
+        if (!applicable.some(function (e) { return e.id === S.exam; })) {
+            S.exam = applicable.length ? applicable[0].id : "";
+        }
+
+
         const allowed = allowedSubjects();
 
         if (!allowed.some(function (s) { return s.id === S.subject; })) {
@@ -330,13 +346,15 @@ export function initMarks(env) {
             return;
         }
 
-        if (!S.exams.length) {
+        const applicable = S.exams.filter(examApplies);
+
+        if (!applicable.length) {
             root.innerHTML = head + "<div class=\"ax-empty\"><strong>No exams yet</strong>" +
                 "<p class=\"ax-muted\">Create an exam under Academic Records > Exams first.</p></div>";
             return;
         }
 
-        const examOpts = S.exams.map(function (e) {
+        const examOpts = applicable.map(function (e) {
             return "<option value=\"" + esc(e.id) + "\"" + (e.id === S.exam ? " selected" : "") + ">" + esc(e.name || e.id) +
                 (e.academicYear ? " · " + esc(e.academicYear) : "") + "</option>";
         }).join("");

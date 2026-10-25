@@ -305,12 +305,21 @@ export function initAcademic(env) {
     function examsHtml() {
 
         const add = S.canManage
-            ? "<button type=\"button\" class=\"ax-btn ax-primary\" data-ac=\"add-exam\">+ Add exam</button>"
+            ? "<div class=\"ax-bar\" style=\"margin-top:0;border-top:0;padding-top:0\"><button type=\"button\" class=\"ax-btn ax-primary\" data-ac=\"add-exam\">+ Add exam</button></div>"
             : "";
+
+        const scopeText = function (e) {
+            if (!e.scope || e.scope.all !== false) return "All classes";
+            return (e.scope.classes || []).map(function (c) {
+                const all = (S.classes.find(function (x) { return x.class === c.class; }) || { sections: [] }).sections;
+                const same = all.length === (c.sections || []).length;
+                return classLabel(c.class) + " (" + (same ? "all sections" : (c.sections || []).join(", ")) + ")";
+            }).join("; ");
+        };
 
         const rows = S.exams.map(function (e) {
             return "<tr><td><strong>" + esc(e.name) + "</strong></td><td>" + esc(e.academicYear || "—") +
-                "</td><td>" + esc(e.startDate || "—") + "</td><td>" + esc(e.endDate || "—") + "</td><td>" +
+                "</td><td>" + esc(scopeText(e)) + "</td><td>" + esc(e.startDate || "—") + "</td><td>" + esc(e.endDate || "—") + "</td><td>" +
                 (S.canManage
                     ? "<div class=\"ax-row-actions\"><button type=\"button\" class=\"ax-btn ax-sm\" data-ac=\"edit-exam\" data-id=\"" +
                       esc(e.id) + "\">Edit</button><button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-ac=\"delete-exam\" data-id=\"" +
@@ -318,10 +327,10 @@ export function initAcademic(env) {
                     : "") + "</td></tr>";
         }).join("");
 
-        return "<section class=\"ax-panel\"><div class=\"ax-head-actions\">" + add + "</div>" +
+        return "<section class=\"ax-panel\">" + add +
             (S.exams.length
                 ? "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Exam</th><th>Academic year</th>" +
-                  "<th>Starts</th><th>Ends</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>"
+                  "<th>Classes</th><th>Starts</th><th>Ends</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>"
                 : "<div class=\"ax-empty\"><strong>No exams yet</strong><p class=\"ax-muted\">Add exams such as Term 1 or Unit Test 2.</p></div>") +
             "</section>";
     }
@@ -352,6 +361,53 @@ export function initAcademic(env) {
         if (d.section === "__all") return cls.sections.slice();
         if (d.section === "__custom") return (d.customSections || []).slice();
         return [d.section];
+    }
+
+    // The exam form values: all classes, or the chosen classes and their sections
+    function examDraft(e) {
+        const first = S.classes[0] || { class: "" };
+        const scope = e && e.scope ? e.scope : { all: true };
+        return {
+            name: e ? e.name || "" : "",
+            academicYear: e ? e.academicYear || "" : "",
+            startDate: e ? e.startDate || "" : "",
+            endDate: e ? e.endDate || "" : "",
+            scopeAll: scope.all !== false,
+            rows: scope.all === false && Array.isArray(scope.classes)
+                ? scope.classes.map(function (c) { return { class: c.class, sections: (c.sections || []).slice() }; })
+                : [],
+            pickClass: first.class,
+            pickSection: "__all"
+        };
+    }
+
+    // Adding classes to an exam: a class, then all its sections or one section
+    function examClassPicker(d) {
+
+        const cls = S.classes.find(function (c) { return c.class === d.pickClass; }) || { sections: [] };
+
+        const classOpts = S.classes.map(function (c) {
+            return "<option value=\"" + esc(c.class) + "\"" + (c.class === d.pickClass ? " selected" : "") + ">" + esc(classLabel(c.class)) + "</option>";
+        }).join("");
+
+        const secOpts = "<option value=\"__all\"" + (d.pickSection === "__all" ? " selected" : "") + ">All sections</option>" +
+            cls.sections.map(function (sec) {
+                return "<option value=\"" + esc(sec) + "\"" + (d.pickSection === sec ? " selected" : "") + ">Section " + esc(sec) + "</option>";
+            }).join("");
+
+        const list = d.rows.length
+            ? "<ul class=\"ax-attention\">" + d.rows.map(function (r, i) {
+                const all = (S.classes.find(function (x) { return x.class === r.class; }) || { sections: [] }).sections;
+                const same = all.length === r.sections.length;
+                return "<li>" + esc(classLabel(r.class)) + " · " + esc(same ? "All sections" : "Sections " + r.sections.join(", ")) +
+                    " <button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-ac=\"rm-exam-class\" data-i=\"" + i + "\">Remove</button></li>";
+              }).join("") + "</ul>"
+            : "<p class=\"ax-muted\">No classes added yet.</p>";
+
+        return "<div class=\"ax-grid\"><label class=\"ax-grow\"><span>Class</span><select id=\"acExClass\">" + classOpts + "</select></label>" +
+            "<label class=\"ax-grow\"><span>Section</span><select id=\"acExSec\">" + secOpts + "</select></label></div>" +
+            "<div class=\"ax-bar\" style=\"margin-top:0;border-top:0;padding-top:0\"><button type=\"button\" class=\"ax-btn\" data-ac=\"add-exam-class\">Add class</button></div>" +
+            list;
     }
 
     function renderModal() {
@@ -403,7 +459,11 @@ export function initAcademic(env) {
                     field("Academic year (e.g. 2026-27)", "acYear", d.academicYear, " maxlength=\"7\"") +
                     "<div class=\"ax-grid\"><label class=\"ax-grow\"><span>Starts</span><input type=\"date\" id=\"acStart\" value=\"" +
                     esc(d.startDate) + "\"></label><label class=\"ax-grow\"><span>Ends</span><input type=\"date\" id=\"acEnd\" value=\"" +
-                    esc(d.endDate) + "\"></label></div>";
+                    esc(d.endDate) + "\"></label></div>" +
+                    "<h4 class=\"ax-subtitle\">Which classes take this exam?</h4>" +
+                    "<label class=\"ax-check\"><input type=\"radio\" name=\"acScope\" data-ac-scope=\"all\"" + (d.scopeAll ? " checked" : "") + "><span>All classes</span></label>" +
+                    "<label class=\"ax-check\"><input type=\"radio\" name=\"acScope\" data-ac-scope=\"some\"" + (!d.scopeAll ? " checked" : "") + "><span>Selected classes</span></label>" +
+                    (d.scopeAll ? "" : examClassPicker(d));
 
                 title = m.id ? "Edit exam" : "Add exam";
             }
@@ -470,7 +530,10 @@ export function initAcademic(env) {
                     name: m.draft.name,
                     academicYear: m.draft.academicYear,
                     startDate: m.draft.startDate,
-                    endDate: m.draft.endDate
+                    endDate: m.draft.endDate,
+                    scope: m.draft.scopeAll
+                        ? { all: true }
+                        : { all: false, classes: m.draft.rows.map(function (r) { return { class: r.class, sections: r.sections }; }) }
                 });
 
                 toast("Exam saved.", "ok");
@@ -563,7 +626,7 @@ export function initAcademic(env) {
 
             if (act === "add-exam") {
 
-                S.modal = { type: "exam", id: "", draft: { name: "", academicYear: "", startDate: "", endDate: "" }, error: "" };
+                S.modal = { type: "exam", id: "", draft: examDraft(null), error: "" };
 
                 return renderModal();
             }
@@ -576,7 +639,7 @@ export function initAcademic(env) {
 
                 S.modal = {
                     type: "exam", id: id,
-                    draft: { name: e.name || "", academicYear: e.academicYear || "", startDate: e.startDate || "", endDate: e.endDate || "" },
+                    draft: examDraft(e),
                     error: ""
                 };
 
@@ -605,18 +668,45 @@ export function initAcademic(env) {
 
         if (!t) return;
 
-        if (t.dataset.ac === "backdrop") {
+        const act = t.dataset.ac;
 
+        if (act === "backdrop") {
             if (event.target === t && !S.busy) closeModal();
-
             return;
         }
 
-        if (t.dataset.ac === "close" && !S.busy) return closeModal();
+        if (act === "close" && !S.busy) return closeModal();
 
-        if (t.dataset.ac === "save") return save();
+        if (act === "save") return save();
+
+        const d = S.modal && S.modal.type === "exam" ? S.modal.draft : null;
+
+        if (!d) return;
+
+        if (act === "add-exam-class") {
+
+            const cls = S.classes.find(function (c) { return c.class === d.pickClass; });
+
+            if (!cls) return;
+
+            const sections = d.pickSection === "__all" ? cls.sections.slice() : [d.pickSection];
+
+            const existing = d.rows.find(function (r) { return r.class === cls.class; });
+
+            if (existing) {
+                sections.forEach(function (sec) { if (!existing.sections.includes(sec)) existing.sections.push(sec); });
+            } else {
+                d.rows.push({ class: cls.class, sections: sections });
+            }
+
+            return renderModal();
+        }
+
+        if (act === "rm-exam-class") {
+            d.rows.splice(Number(t.dataset.i), 1);
+            return renderModal();
+        }
     });
-
     modalHost.addEventListener("input", function (event) {
 
         const el = event.target;
@@ -639,6 +729,12 @@ export function initAcademic(env) {
 
         if (!d) return;
 
+        if (el.dataset.acScope === "all") { d.scopeAll = true; return renderModal(); }
+        if (el.dataset.acScope === "some") { d.scopeAll = false; return renderModal(); }
+
+        if (el.id === "acExClass") { d.pickClass = el.value; d.pickSection = "__all"; return renderModal(); }
+        if (el.id === "acExSec") { d.pickSection = el.value; return; }
+
         if (el.id === "acClassM") {
             d.class = el.value;
             d.section = "__all";
@@ -646,10 +742,7 @@ export function initAcademic(env) {
             return renderModal();
         }
 
-        if (el.id === "acSecM") {
-            d.section = el.value;
-            return;
-        }
+        if (el.id === "acSecM") { d.section = el.value; return; }
 
         if (el.id === "acStart") d.startDate = el.value;
         else if (el.id === "acEnd") d.endDate = el.value;
