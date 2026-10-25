@@ -155,13 +155,7 @@
 
             <!-- Classes -->
 
-            <div
-                    class="nav-item"
-                    id="classesNav"
-                    onclick="showPage('classes', this)"
-            >
-                Classes
-            </div>
+
 
 
             <!-- Attendance -->
@@ -212,24 +206,38 @@
 
             <!-- Academic Records -->
 
-            <div
-                    class="nav-item"
-                    id="academicRecordsNav"
-                    onclick="showPage('academicRecords', this)"
-            >
-                Academic Records
+            <div class="nav-group" id="academicGroup">
+
+                <div class="nav-item" id="academicRecordsNav" onclick="showPage('academicRecords', this)">
+                    Academic Records
+                </div>
+
+                <div class="nav-children">
+
+                    <div class="nav-subitem" id="classesNav" onclick="showPage('classes', this)">
+                        Classes
+                    </div>
+
+                    <div class="nav-subitem" data-acnav="subjects" onclick="openAcademic('subjects', this)">
+                        Subjects
+                    </div>
+
+                    <div class="nav-subitem" data-acnav="exams" onclick="openAcademic('exams', this)">
+                        Exams
+                    </div>
+
+                    <div class="nav-subitem" id="marksNav" onclick="showPage('marks', this)">
+                        Marks
+                    </div>
+
+                </div>
+
             </div>
 
 
             <!-- Marks -->
 
-            <div
-                    class="nav-item"
-                    id="marksNav"
-                    onclick="showPage('marks', this)"
-            >
-                Marks
-            </div>
+
 
 
             <!-- Settings (sub-navigation). More settings are added as data-setnav items. -->

@@ -218,8 +218,9 @@ export function initAcademic(env) {
 
     // ---------- page ----------
 
-    async function open() {
+    async function open(tab) {
 
+        if (tab) S.tab = tab;
         if (!root || !S.inst) return;
 
         root.innerHTML = "<p class=\"ax-muted\">Loading…</p>";
@@ -286,7 +287,11 @@ export function initAcademic(env) {
             : "";
 
         const rows = list.map(function (s) {
-            return "<tr><td><strong>" + esc(s.name) + "</strong></td><td>" + esc(s.code || "—") + "</td><td>" +
+
+            const secs = Array.isArray(s.sections) && s.sections.length ? s.sections.join(", ") : "—";
+
+            return "<tr><td><strong>" + esc(s.name) + "</strong></td><td>" + esc(s.group || "—") + "</td><td>" +
+                esc(s.code || "—") + "</td><td>" + esc(secs) + "</td><td>" +
                 (S.canManage
                     ? "<div class=\"ax-row-actions\"><button type=\"button\" class=\"ax-btn ax-sm\" data-ac=\"edit-subject\" data-id=\"" +
                       esc(s.id) + "\">Edit</button><button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-ac=\"delete-subject\" data-id=\"" +
@@ -298,9 +303,11 @@ export function initAcademic(env) {
             "<label class=\"ax-grow\"><span>Class</span><select id=\"acClass\">" + options + "</select></label>" +
             "<div style=\"align-self:flex-end;margin-bottom:14px\">" + add + "</div></div>" +
             (list.length
-                ? "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Subject</th><th>Code</th><th></th></tr></thead><tbody>" +
-                  rows + "</tbody></table></div>"
-                : emptyPanel("No subjects for " + classLabel(S.cls), "Add the subjects taught in this class.").replace(/^<section class="ax-panel">|<\/section>$/g, "")) +
+                ? "<p class=\"ax-muted\">Subjects taught in " + esc(classLabel(S.cls)) + ".</p>" +
+                  "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Subject</th><th>Group or stream</th>" +
+                  "<th>Code</th><th>Taught in sections</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>"
+                : "<div class=\"ax-empty\"><strong>No subjects for " + esc(classLabel(S.cls)) + " yet</strong>" +
+                  "<p class=\"ax-muted\">Click + Add subject, choose the class and the sections that take it, then give the subject a name.</p></div>") +
             "</section>";
     }
 
@@ -347,18 +354,49 @@ export function initAcademic(env) {
 
             const isSubject = m.type === "subject";
 
-            const body = isSubject
-                ? field("Subject name", "acName", m.draft.name, " maxlength=\"60\"") +
-                  field("Short code (optional)", "acCode", m.draft.code, " maxlength=\"12\"")
-                : field("Exam name", "acExamName", m.draft.name, " maxlength=\"60\"") +
-                  field("Academic year (e.g. 2026-27)", "acYear", m.draft.academicYear, " maxlength=\"7\"") +
-                  "<div class=\"ax-grid\"><label class=\"ax-grow\"><span>Starts</span><input type=\"date\" id=\"acStart\" value=\"" +
-                  esc(m.draft.startDate) + "\"></label><label class=\"ax-grow\"><span>Ends</span><input type=\"date\" id=\"acEnd\" value=\"" +
-                  esc(m.draft.endDate) + "\"></label></div>";
+            let body;
+            let title;
 
-            const title = isSubject
-                ? (m.id ? "Edit subject" : "Add subject to " + classLabel(S.cls))
-                : (m.id ? "Edit exam" : "Add exam");
+            if (isSubject) {
+
+                const d = m.draft;
+
+                const cls = S.classes.find(function (c) { return c.class === d.class; }) || { sections: [] };
+
+                const classOptions = S.classes.map(function (c) {
+                    return "<option value=\"" + esc(c.class) + "\"" + (c.class === d.class ? " selected" : "") + ">" +
+                        esc(classLabel(c.class)) + "</option>";
+                }).join("");
+
+                const sectionBoxes = cls.sections.length
+                    ? cls.sections.map(function (sec) {
+                        return "<label class=\"ax-check\"><input type=\"checkbox\" data-acs=\"sec\" value=\"" + esc(sec) + "\"" +
+                            (d.sections.includes(sec) ? " checked" : "") + "><span>Section " + esc(sec) + "</span></label>";
+                    }).join("")
+                    : "<p class=\"ax-muted\">This class has no sections yet. Add sections under Classes first.</p>";
+
+                body =
+                    "<label><span>Class</span><select id=\"acClassM\">" + classOptions + "</select></label>" +
+                    "<p class=\"ax-muted\">Tick the sections this subject is taught in.</p>" +
+                    "<div class=\"sx-checks\">" + sectionBoxes + "</div>" +
+                    field("Subject name", "acName", d.name, " maxlength=\"60\" placeholder=\"e.g. English, Physics\"") +
+                    field("Group or stream (optional)", "acGroup", d.group, " maxlength=\"60\" placeholder=\"e.g. Science, Commerce, Core\"") +
+                    field("Short code (optional)", "acCode", d.code, " maxlength=\"12\" placeholder=\"e.g. ENG\"");
+
+                title = m.id ? "Edit subject" : "Add subject";
+
+            } else {
+
+                const d = m.draft;
+
+                body = field("Exam name", "acExamName", d.name, " maxlength=\"60\"") +
+                    field("Academic year (e.g. 2026-27)", "acYear", d.academicYear, " maxlength=\"7\"") +
+                    "<div class=\"ax-grid\"><label class=\"ax-grow\"><span>Starts</span><input type=\"date\" id=\"acStart\" value=\"" +
+                    esc(d.startDate) + "\"></label><label class=\"ax-grow\"><span>Ends</span><input type=\"date\" id=\"acEnd\" value=\"" +
+                    esc(d.endDate) + "\"></label></div>";
+
+                title = m.id ? "Edit exam" : "Add exam";
+            }
 
             html = "<div class=\"ax-backdrop\" data-ac=\"backdrop\"><div class=\"ax-modal\" role=\"dialog\" aria-modal=\"true\">" +
                 "<div class=\"ax-modal-head\"><div><h3>" + esc(title) + "</h3></div>" +
@@ -405,10 +443,12 @@ export function initAcademic(env) {
 
                 await api("/api/academic/subjects/save", {
                     institutionId: S.inst,
-                    class: S.cls,
+                    class: m.draft.class,
                     subjectId: m.id || "",
                     name: m.draft.name,
-                    code: m.draft.code
+                    code: m.draft.code,
+                    group: m.draft.group,
+                    sections: m.draft.sections
                 });
 
                 toast("Subject saved.", "ok");
@@ -494,7 +534,7 @@ export function initAcademic(env) {
 
             if (act === "add-subject") {
 
-                S.modal = { type: "subject", id: "", draft: { name: "", code: "" }, error: "" };
+                S.modal = { type: "subject", id: "", error: "", draft: { class: S.cls, sections: ((S.classes.find(function (c) { return c.class === S.cls; }) || { sections: [] }).sections || []).slice(), name: "", group: "", code: "" } };
 
                 return renderModal();
             }
@@ -505,7 +545,7 @@ export function initAcademic(env) {
 
                 if (!s) return;
 
-                S.modal = { type: "subject", id: id, draft: { name: s.name || "", code: s.code || "" }, error: "" };
+                S.modal = { type: "subject", id: id, error: "", draft: { class: s.class, sections: Array.isArray(s.sections) ? s.sections.slice() : [], name: s.name || "", group: s.group || "", code: s.code || "" } };
 
                 return renderModal();
             }
@@ -576,6 +616,7 @@ export function initAcademic(env) {
         if (!d) return;
 
         if (el.id === "acName") d.name = el.value;
+        else if (el.id === "acGroup") d.group = el.value;
         else if (el.id === "acCode") d.code = el.value;
         else if (el.id === "acExamName") d.name = el.value;
         else if (el.id === "acYear") d.academicYear = el.value;
@@ -590,10 +631,21 @@ export function initAcademic(env) {
 
         if (!d) return;
 
+        if (el.id === "acClassM") {
+            d.class = el.value;
+            d.sections = ((S.classes.find(function (c) { return c.class === d.class; }) || { sections: [] }).sections || []).slice();
+            return renderModal();
+        }
+
+        if (el.dataset.acs === "sec") {
+            if (el.checked) { if (!d.sections.includes(el.value)) d.sections.push(el.value); }
+            else d.sections = d.sections.filter(function (x) { return x !== el.value; });
+            return;
+        }
+
         if (el.id === "acStart") d.startDate = el.value;
         else if (el.id === "acEnd") d.endDate = el.value;
     });
-
     document.addEventListener("keydown", function (event) {
 
         if (event.key === "Escape" && S.modal && !S.busy) closeModal();

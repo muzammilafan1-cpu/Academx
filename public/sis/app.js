@@ -659,7 +659,10 @@ function showPage(
 
     if (page === "attendance") attendance.open();
 
-    if (page === "academicRecords") academic.open();
+    if (page === "academicRecords") {
+        academic.open(pendingAcademicTab || "subjects");
+        pendingAcademicTab = null;
+    }
 
     if (page === "rules") rules.open();
 
@@ -671,6 +674,9 @@ function showPage(
 
     const settingsGroup = document.getElementById("settingsGroup");
     if (settingsGroup) settingsGroup.classList.toggle("open", page === "rules" || page === "config");
+
+    const academicGroup = document.getElementById("academicGroup");
+    if (academicGroup) academicGroup.classList.toggle("open", ["academicRecords", "classes", "marks"].includes(page));
 }
 
 
@@ -679,6 +685,13 @@ function showPage(
 // so it is exposed explicitly here.
 
 window.showPage = showPage;
+
+// Academic Records sub-items: open the page on a chosen tab (subjects or exams)
+let pendingAcademicTab = null;
+window.openAcademic = function (tab, clickedItem) {
+    pendingAcademicTab = tab;
+    showPage("academicRecords", clickedItem || null);
+};
 
 
 // ============================================================
