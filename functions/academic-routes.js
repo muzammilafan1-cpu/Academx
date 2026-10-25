@@ -292,6 +292,50 @@ function createAcademicHandlers(admin, log) {
             throw new ApiError(400, "invalid-argument", "The end date can't be before the start date.");
         }
 
+        // Which classes and sections take this exam: all classes, or chosen classes with all or some sections
+        let scope = { all: true };
+
+        if (!(body.scope && body.scope.all === true)) {
+
+            const rows = body.scope && Array.isArray(body.scope.classes) ? body.scope.classes : [];
+
+            if (!rows.length) {
+                throw new ApiError(400, "invalid-argument", "Choose All classes, or add at least one class.");
+            }
+
+            const classSnap = await db.collection("classes").where("institutionId", "==", ctx.institutionId).get();
+
+            const byClass = new Map();
+
+            for (const row of rows) {
+
+                const cls = String(row && row.class || "").trim();
+
+                const clsDoc = classSnap.docs.find(function (d) { return String(d.data().class) === cls; });
+
+                if (!clsDoc) throw new ApiError(400, "invalid-argument", "Class " + cls + " isn't set up under Classes.");
+
+                const classSections = Array.isArray(clsDoc.data().sections) ? clsDoc.data().sections.map(String) : [];
+
+                const chosen = Array.isArray(row.sections) && row.sections.length ? row.sections.map(String) : classSections;
+
+                for (const sec of chosen) {
+                    if (!classSections.includes(sec)) {
+                        throw new ApiError(400, "invalid-argument", "Section " + sec + " doesn't exist in class " + cls + ".");
+                    }
+                }
+
+                const set = byClass.get(cls) || new Set();
+                chosen.forEach(function (sec) { set.add(sec); });
+                byClass.set(cls, set);
+            }
+
+            scope = {
+                all: false,
+                classes: [...byClass.entries()].map(function (e) { return { class: e[0], sections: [...e[1]] }; })
+            };
+        }
+
         const examId = body.examId ? validId(body.examId) : "";
 
         if (body.examId && !examId) throw new ApiError(400, "invalid-argument", "Invalid exam.");
@@ -312,6 +356,7 @@ function createAcademicHandlers(admin, log) {
         const data = {
             name: name,
             academicYear: academicYear,
+            scope: scope,
             startDate: startDate,
             endDate: endDate,
             updatedAt: FieldValue.serverTimestamp(),

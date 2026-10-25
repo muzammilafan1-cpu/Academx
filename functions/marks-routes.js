@@ -133,6 +133,15 @@ function createMarksHandlers(admin, log) {
         const examSnap = await db.doc("institutions/" + inst + "/exams/" + examId).get();
         if (!examSnap.exists) bad("That exam doesn't exist.");
 
+        // The exam must include this class and section (older exams with no scope cover all classes)
+        const examScope = examSnap.data().scope;
+        const examCoversSection = !examScope || examScope.all !== false ||
+            (Array.isArray(examScope.classes) && examScope.classes.some(function (c) {
+                return String(c.class) === className && Array.isArray(c.sections) && c.sections.includes(section);
+            }));
+
+        if (!examCoversSection) bad("This exam doesn't include " + className + ", section " + section + ".");
+
         const subjSnap = await db.doc("institutions/" + inst + "/subjects/" + subjectId).get();
         if (!subjSnap.exists || String(subjSnap.data().class) !== className) bad("That subject isn't in this class.");
 
