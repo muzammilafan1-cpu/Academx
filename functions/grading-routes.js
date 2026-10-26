@@ -55,32 +55,6 @@ function validateGradingPayload(p) {
 
     if (!GRADING_TYPES.includes(p.gradingType)) bad("Choose a grading type.");
 
-    // Components: what makes up a subject's total, with weights that add up to 100
-    if (!Array.isArray(p.components) || p.components.length < 1 || p.components.length > 6) {
-        bad("Add between 1 and 6 components.");
-    }
-
-    const components = p.components.map(function (c) {
-
-        const name = typeof c.name === "string" ? c.name.trim() : "";
-
-        if (!NAME_PATTERN.test(name)) bad("Each component needs a name of up to 40 characters.");
-
-        const weight = whole(c.weight, 1, 100);
-
-        if (weight === null) bad("Each weight must be a whole number from 1 to 100.");
-
-        return { name: name, weight: weight };
-    });
-
-    const names = components.map(function (c) { return c.name.toLowerCase(); });
-
-    if (new Set(names).size !== names.length) bad("Component names must be different.");
-
-    const total = components.reduce(function (sum, c) { return sum + c.weight; }, 0);
-
-    if (total !== 100) bad("Component weights must add up to 100. They add up to " + total + ".");
-
     // Pass rule
     const minPercent = whole(p.passRule && p.passRule.minPercent, 0, 100);
 
@@ -119,7 +93,6 @@ function validateGradingPayload(p) {
 
     return {
         gradingType: p.gradingType,
-        components: components,
         bands: bands,
         passRule: passRule,
         divisions: divisions,

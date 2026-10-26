@@ -156,6 +156,21 @@ function createAcademicHandlers(admin, log) {
             }
         }
 
+        // Marks parts for this subject, named by the school (for example Theory, Practical). Default: Total.
+        const partsIn = Array.isArray(body.parts)
+            ? body.parts.map(function (x) { return String(x).trim(); }).filter(Boolean)
+            : [];
+
+        const subjectParts = [...new Set(partsIn.length ? partsIn : ["Total"])];
+
+        if (subjectParts.length > 4) throw new ApiError(400, "invalid-argument", "A subject can have up to 4 marks parts.");
+
+        for (const part of subjectParts) {
+            if (!NAME_PATTERN.test(part)) {
+                throw new ApiError(400, "invalid-argument", "Each marks part needs a name of up to 60 characters.");
+            }
+        }
+
         const group = typeof body.group === "string" ? body.group.trim() : "";
 
         if (group && !NAME_PATTERN.test(group)) {
@@ -211,6 +226,7 @@ function createAcademicHandlers(admin, log) {
                 code: code,
                 sections: sections,
                 group: group,
+                parts: subjectParts,
                 updatedAt: FieldValue.serverTimestamp(),
                 updatedBy: ctx.uid
             }, { merge: true });
@@ -227,6 +243,7 @@ function createAcademicHandlers(admin, log) {
             code: code,
             sections: sections,
             group: group,
+            parts: subjectParts,
             createdAt: FieldValue.serverTimestamp(),
             createdBy: ctx.uid,
             updatedAt: FieldValue.serverTimestamp(),
@@ -325,10 +342,11 @@ function createAcademicHandlers(admin, log) {
             };
         }
 
-        // Paper dates: one per subject in the exam. A paper without a date yet is allowed.
-        const schedule = [];
+        // Papers: one line per subject in the exam. Each part of the subject has an out-of mark.
+        // The paper date is optional.
+        const papers = [];
 
-        const paperRows = Array.isArray(body.schedule) ? body.schedule : [];
+        const paperRows = Array.isArray(body.papers) ? body.papers : [];
 
         if (paperRows.length > 500) throw new ApiError(400, "invalid-argument", "Too many papers in one exam.");
 
@@ -338,17 +356,8 @@ function createAcademicHandlers(admin, log) {
 
             const cls = String(row && row.class || "").trim();
             const subjectId = validId(row && row.subjectId);
-            const date = typeof row.date === "string" ? row.date.trim() : "";
 
             if (!subjectId) throw new ApiError(400, "invalid-argument", "A paper has an invalid subject.");
-
-            if (!date) continue;
-
-            if (!validDate(date)) throw new ApiError(400, "invalid-argument", "A paper date isn't a real date.");
-
-            if (scope.all === false && !scope.classes.some(function (c) { return c.class === cls; })) {
-                throw new ApiError(400, "invalid-argument", "A paper is for a class that isn't in this exam.");
-            }
 
             const subj = subjectSnap.docs.find(function (d) { return d.id === subjectId; });
 
@@ -356,49 +365,35 @@ function createAcademicHandlers(admin, log) {
                 throw new ApiError(400, "invalid-argument", "A subject isn't in class " + cls + ".");
             }
 
-            schedule.push({ class: cls, subjectId: subjectId, subjectName: subj.data().name || "", date: date });
-        }
-
-        // Marks parts for this exam: each has a name, a maximum and a weight. Weights add up to 100.
-        const partsIn = Array.isArray(body.components) ? body.components : [];
-
-        if (!partsIn.length || partsIn.length > 6) {
-            throw new ApiError(400, "invalid-argument", "Add between 1 and 6 marks parts for this exam.");
-        }
-
-        const components = partsIn.map(function (c) {
-
-            const name = typeof c.name === "string" ? c.name.trim() : "";
-
-            if (!NAME_PATTERN.test(name)) {
-                throw new ApiError(400, "invalid-argument", "Each marks part needs a name of up to 60 characters.");
+            if (scope.all === false && !scope.classes.some(function (c) { return c.class === cls; })) {
+                throw new ApiError(400, "invalid-argument", "A paper is for a class that isn't in this exam.");
             }
 
-            const max = Number(c.max);
+            const subjectParts = Array.isArray(subj.data().parts) && subj.data().parts.length
+                ? subj.data().parts.map(String)
+                : ["Total"];
 
-            if (!Number.isFinite(max) || max <= 0 || max > 1000) {
-                throw new ApiError(400, "invalid-argument", "Each part's maximum must be a number above 0 and up to 1000.");
-            }
+            const givenParts = Array.isArray(row.parts) ? row.parts : [];
 
-            const weight = Number(c.weight);
+            const parts = subjectParts.map(function (name) {
 
-            if (!Number.isInteger(weight) || weight < 1 || weight > 100) {
-                throw new ApiError(400, "invalid-argument", "Each part's weight must be a whole number from 1 to 100.");
-            }
+                const given = givenParts.find(function (x) { return x && String(x.name) === name; });
 
-            return { name: name, max: max, weight: weight };
-        });
+                const max = given ? Number(given.max) : NaN;
 
-        const partNames = components.map(function (c) { return c.name.toLowerCase(); });
+                if (!Number.isFinite(max) || max <= 0 || max > 1000) {
+                    throw new ApiError(400, "invalid-argument",
+                        "Enter the out-of mark for " + name + " in " + (subj.data().name || "this subject") + " (above 0, up to 1000).");
+                }
 
-        if (new Set(partNames).size !== partNames.length) {
-            throw new ApiError(400, "invalid-argument", "Marks part names must be different.");
-        }
+                return { name: name, max: max };
+            });
 
-        const weightTotal = components.reduce(function (n, c) { return n + c.weight; }, 0);
+            const date = typeof row.date === "string" ? row.date.trim() : "";
 
-        if (weightTotal !== 100) {
-            throw new ApiError(400, "invalid-argument", "The weights of the marks parts must add up to 100. They add up to " + weightTotal + ".");
+            if (date && !validDate(date)) throw new ApiError(400, "invalid-argument", "A paper date isn't a real date.");
+
+            papers.push({ class: cls, subjectId: subjectId, subjectName: subj.data().name || "", date: date, parts: parts });
         }
 
         const examId = body.examId ? validId(body.examId) : "";
@@ -422,8 +417,7 @@ function createAcademicHandlers(admin, log) {
             name: name,
             academicYear: academicYear,
             scope: scope,
-            schedule: schedule,
-            components: components,
+            papers: papers,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: ctx.uid
         };

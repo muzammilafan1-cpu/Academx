@@ -157,12 +157,13 @@ function createMarksHandlers(admin, log) {
         const gradingSnap = await db.doc("gradingSettings/" + inst).get();
         if (!gradingSnap.exists) bad("Set up Grading rules first (Settings > Business rules > Grading rules).");
         const grading = gradingSnap.data();
-        // The exam's own marks parts; older exams fall back to the grading defaults
-        const examParts = Array.isArray(examSnap.data().components) && examSnap.data().components.length
-            ? examSnap.data().components
-            : (Array.isArray(grading.components) ? grading.components : []);
+        // The marks parts for this subject in this exam, from its paper line
+        const paper = (Array.isArray(examSnap.data().papers) ? examSnap.data().papers : [])
+            .find(function (p) { return p.class === className && p.subjectId === subjectId; });
 
-        const components = examParts;
+        if (!paper) bad("This subject isn't in this exam.");
+
+        const components = paper.parts;
         const componentNames = components.map(function (c) { return c.name; });
 
         // ---- who may enter marks for this subject in this section ----
@@ -205,21 +206,9 @@ function createMarksHandlers(admin, log) {
         if (existing.exists && existing.data().maxes) {
             maxes = { ...existing.data().maxes };
         } else {
-            components.forEach(function (c) { maxes[c.name] = Number(c.max || c.weight); });
+            components.forEach(function (c) { maxes[c.name] = Number(c.max); });
         }
 
-        if (body.maxes && typeof body.maxes === "object") {
-            if (ctx.role !== "admin") {
-                throw new ApiError(403, "permission-denied", "Only an administrator can change the maximum marks.");
-            }
-            const next = {};
-            componentNames.forEach(function (name) {
-                const v = Number(body.maxes[name]);
-                if (!Number.isFinite(v) || v <= 0 || v > 1000) bad("Each maximum must be a number above 0 and up to 1000.");
-                next[name] = v;
-            });
-            maxes = next;
-        }
 
         // ---- scores ----
         const studentsSnap = await db.collection("users")
