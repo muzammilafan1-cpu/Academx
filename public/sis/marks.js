@@ -193,16 +193,19 @@ export function initMarks(env) {
     }
 
     // The selected exam's own marks parts; older exams use the grading defaults
+    // The marks parts of this subject in the selected exam
     function components() {
         const e = S.exams.find(function (x) { return x.id === S.exam; });
-        if (e && Array.isArray(e.components) && e.components.length) return e.components;
-        return S.grading && Array.isArray(S.grading.components) ? S.grading.components : [];
+        const paper = e && Array.isArray(e.papers)
+            ? e.papers.find(function (p) { return p.class === S.cls && p.subjectId === S.subject; })
+            : null;
+        return paper ? paper.parts : [];
     }
 
     function maxFor(name) {
         if (S.mark && S.mark.maxes && S.mark.maxes[name] !== undefined) return Number(S.mark.maxes[name]);
         const c = components().find(function (x) { return x.name === name; });
-        return c ? Number(c.max || c.weight) : 0;
+        return c ? Number(c.max) : 0;
     }
 
 
@@ -218,14 +221,15 @@ export function initMarks(env) {
         return Math.round(value * f) / f;
     }
 
+    // Total = marks got across all parts, out of the maximum across all parts, as a percentage
     function totalFor(row) {
 
         const comps = components();
 
         if (!comps.length) return null;
 
-        let sum = 0;
-        let weightSum = 0;
+        let got = 0;
+        let possible = 0;
 
         for (const c of comps) {
 
@@ -233,15 +237,11 @@ export function initMarks(env) {
 
             if (v === null || v === undefined || v === "") return null;
 
-            const max = maxFor(c.name);
-
-            if (!max) return null;
-
-            sum += Number(c.weight) * (Number(v) / max);
-            weightSum += Number(c.weight);
+            got += Number(v);
+            possible += maxFor(c.name);
         }
 
-        return weightSum ? (sum / weightSum) * 100 : null;
+        return possible ? (got / possible) * 100 : null;
     }
 
     function resultFor(total) {

@@ -317,7 +317,7 @@ export function initAcademic(env) {
             : "";
 
         const rows = S.exams.map(function (e) {
-            const papers = Array.isArray(e.schedule) ? e.schedule.length : 0;
+            const papers = Array.isArray(e.papers) ? e.papers.filter(function (p) { return !!p.date; }).length : 0;
             return "<tr><td><strong>" + esc(e.name) + "</strong></td><td>" + esc(e.academicYear || "—") +
                 "</td><td>" + esc(scopeText(e)) + "</td><td>" + papers + "</td><td><div class=\"ax-row-actions\">" +
                 "<button type=\"button\" class=\"ax-btn ax-sm\" data-ac=\"view-exam\" data-id=\"" + esc(e.id) + "\">View</button>" +
@@ -352,7 +352,7 @@ export function initAcademic(env) {
         let section = "__all";
         if (!sameSet && taught.length === 1) section = taught[0];
         if (!sameSet && taught.length > 1) section = "__custom";
-        return { class: subj.class, section: section, customSections: taught, name: subj.name || "", code: subj.code || "" };
+        return { class: subj.class, section: section, customSections: taught, name: subj.name || "", code: subj.code || "", parts: (Array.isArray(subj.parts) && subj.parts.length ? subj.parts : ["Total"]).join(", ") };
     }
 
     // The sections a subject is taught in, from the form values
@@ -381,6 +381,10 @@ export function initAcademic(env) {
         return d.getDay() === 0 ? name + " (Sunday: check)" : name;
     }
 
+    function partsOfSubject(s) {
+        return Array.isArray(s.parts) && s.parts.length ? s.parts : ["Total"];
+    }
+
     // Every subject in the exam's classes, with the sections it is taught in
     function examPaperRows(d) {
         const classes = d.scopeAll
@@ -391,7 +395,7 @@ export function initAcademic(env) {
             S.subjects.filter(function (s) { return s.class === c.class; }).forEach(function (s) {
                 const taught = Array.isArray(s.sections) && s.sections.length ? s.sections : null;
                 const applies = !taught || !c.sections || c.sections.length === 0 || taught.some(function (x) { return c.sections.includes(x); });
-                if (applies) rows.push({ class: c.class, subjectId: s.id, subjectName: s.name });
+                if (applies) rows.push({ class: c.class, subjectId: s.id, subjectName: s.name, parts: partsOfSubject(s) });
             });
         });
         return rows;
@@ -402,18 +406,24 @@ export function initAcademic(env) {
         const rows = examPaperRows(d);
 
         if (!rows.length) {
-            return "<p class=\"ax-muted\">These classes have no subjects yet. Add subjects under Academic Records > Subjects, then set the paper dates.</p>";
+            return "<p class=\"ax-muted\">These classes have no subjects yet. Add subjects under Academic Records > Subjects.</p>";
         }
 
-        return "<h4 class=\"ax-subtitle\">Paper dates</h4>" +
-            "<p class=\"ax-muted\">Set the date of each subject's paper. Leave one empty if it isn't fixed yet.</p>" +
-            "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Class</th><th>Subject</th><th>Paper date</th><th>Day</th></tr></thead><tbody>" +
+        return "<h4 class=\"ax-subtitle\">Papers</h4>" +
+            "<p class=\"ax-muted\">One line per subject. Enter the out-of marks for each part, and the paper date if it's fixed. Sundays are flagged.</p>" +
+            "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Class</th><th>Subject</th><th>Marks (out of)</th><th>Paper date</th><th>Day</th></tr></thead><tbody>" +
             rows.map(function (r) {
                 const key = r.class + "|" + r.subjectId;
-                const date = d.schedule[key] || "";
-                return "<tr><td>" + esc(classLabel(r.class)) + "</td><td>" + esc(r.subjectName) + "</td><td>" +
-                    "<input type=\"date\" data-ac-paper=\"" + esc(key) + "\" value=\"" + esc(date) + "\"></td><td><span data-ac-day=\"" +
-                    esc(key) + "\">" + esc(dayLabel(date)) + "</span></td></tr>";
+                const cell = d.schedule[key] || (d.schedule[key] = { date: "", maxes: {} });
+                const marks = r.parts.map(function (part) {
+                    const v = cell.maxes[part] === undefined ? "" : cell.maxes[part];
+                    return "<label style=\"display:inline-block;margin-right:10px\">" + esc(part) +
+                        " <input type=\"number\" data-acp-key=\"" + esc(key) + "\" data-acp-part=\"" + esc(part) +
+                        "\" value=\"" + esc(v) + "\" min=\"1\" max=\"1000\" step=\"any\" style=\"width:80px\"></label>";
+                }).join("");
+                return "<tr><td>" + esc(classLabel(r.class)) + "</td><td>" + esc(r.subjectName) + "</td><td>" + marks +
+                    "</td><td><input type=\"date\" data-ac-paper=\"" + esc(key) + "\" value=\"" + esc(cell.date || "") +
+                    "\"></td><td><span data-ac-day=\"" + esc(key) + "\">" + esc(dayLabel(cell.date)) + "</span></td></tr>";
             }).join("") + "</tbody></table></div>";
     }
 
@@ -424,13 +434,11 @@ export function initAcademic(env) {
 
         if (!e) return "";
 
-        const papers = (Array.isArray(e.schedule) ? e.schedule : []).slice().sort(function (a, b) {
-            return String(a.date).localeCompare(String(b.date));
+        const papers = (Array.isArray(e.papers) ? e.papers : []).slice().sort(function (a, b) {
+            return String(a.date || "~").localeCompare(String(b.date || "~"));
         });
 
-        const undated = examPaperRows(examDraft(e)).filter(function (r) {
-            return !papers.some(function (p) { return p.class === r.class && p.subjectId === r.subjectId; });
-        }).length;
+        const undated = papers.filter(function (p) { return !p.date; }).length;
 
         const row = function (label, value) {
             return "<div class=\"ax-dl-row\"><dt>" + esc(label) + "</dt><dd>" + value + "</dd></div>";
@@ -441,17 +449,18 @@ export function initAcademic(env) {
             "</div></div><button type=\"button\" class=\"ax-icon\" data-ac=\"close\" aria-label=\"Close\">✕</button></div>" +
             "<div class=\"ax-modal-body\"><dl class=\"ax-dl\">" +
             row("Classes", esc(scopeText(e))) +
-            row("Papers with a date", String(papers.length)) +
+            row("Papers", String(papers.length)) +
             row("Papers without a date", String(undated)) +
             "</dl>" +
-            examComponentsTable(e) + "<h4 class=\"ax-subtitle\">Paper timetable</h4>" +
+            "<h4 class=\"ax-subtitle\">Papers</h4>" +
             (papers.length
-                ? "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Date</th><th>Day</th><th>Class</th><th>Subject</th></tr></thead><tbody>" +
+                ? "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Date</th><th>Day</th><th>Class</th><th>Subject</th><th>Marks (out of)</th></tr></thead><tbody>" +
                   papers.map(function (p) {
-                      return "<tr><td>" + esc(p.date) + "</td><td>" + esc(dayLabel(p.date)) + "</td><td>" + esc(classLabel(p.class)) +
-                          "</td><td>" + esc(p.subjectName) + "</td></tr>";
+                      return "<tr><td>" + esc(p.date || "Not set") + "</td><td>" + esc(dayLabel(p.date)) + "</td><td>" + esc(classLabel(p.class)) +
+                          "</td><td>" + esc(p.subjectName) + "</td><td>" +
+                          esc((p.parts || []).map(function (x) { return x.name + " " + x.max; }).join(", ")) + "</td></tr>";
                   }).join("") + "</tbody></table></div>"
-                : "<p class=\"ax-muted\">No paper dates have been set yet.</p>") +
+                : "<p class=\"ax-muted\">No papers in this exam.</p>") +
             "<div class=\"ax-bar ax-bar-modal\">" +
             (S.canManage ? "<button type=\"button\" class=\"ax-btn ax-primary\" data-ac=\"edit-exam\" data-id=\"" + esc(e.id) + "\">Edit exam</button>" : "") +
             "<button type=\"button\" class=\"ax-btn\" data-ac=\"close\">Close</button></div>" +
@@ -463,8 +472,10 @@ export function initAcademic(env) {
         const first = S.classes[0] || { class: "" };
         const scope = e && e.scope ? e.scope : { all: true };
         const schedule = {};
-        (e && Array.isArray(e.schedule) ? e.schedule : []).forEach(function (p) {
-            schedule[p.class + "|" + p.subjectId] = p.date;
+        (e && Array.isArray(e.papers) ? e.papers : []).forEach(function (p) {
+            const maxes = {};
+            (p.parts || []).forEach(function (x) { maxes[x.name] = x.max; });
+            schedule[p.class + "|" + p.subjectId] = { date: p.date || "", maxes: maxes };
         });
         return {
             name: e ? e.name || "" : "",
@@ -475,10 +486,7 @@ export function initAcademic(env) {
                 : [],
             pickClass: first.class,
             pickSection: "__all",
-            schedule: schedule,
-            components: e && Array.isArray(e.components) && e.components.length
-                ? e.components.map(function (c) { return { name: c.name, max: c.max, weight: c.weight }; })
-                : defaultComponents()
+            schedule: schedule
         };
     }
 
@@ -598,6 +606,7 @@ export function initAcademic(env) {
                     "<label><span>Class</span><select id=\"acClassM\">" + classOptions + "</select></label>" +
                     "<label><span>Section</span><select id=\"acSecM\">" + secOptions + "</select></label>" +
                     field("Subject", "acName", d.name, " maxlength=\"60\" placeholder=\"e.g. English, Physics\"") +
+                    field("Marks parts (comma separated)", "acParts", d.parts, " maxlength=\"120\" placeholder=\"e.g. Theory, Practical  or  Total\"") +
                     field("Subject code (optional)", "acCode", d.code, " maxlength=\"12\" placeholder=\"e.g. ENG\"");
 
                 title = m.id ? "Edit subject" : "Add subject";
@@ -611,7 +620,7 @@ export function initAcademic(env) {
                     "<h4 class=\"ax-subtitle\">Which classes take this exam?</h4>" +
                     "<label class=\"ax-check\"><input type=\"radio\" name=\"acScope\" data-ac-scope=\"all\"" + (d.scopeAll ? " checked" : "") + "><span>All classes</span></label>" +
                     "<label class=\"ax-check\"><input type=\"radio\" name=\"acScope\" data-ac-scope=\"some\"" + (!d.scopeAll ? " checked" : "") + "><span>Selected classes</span></label>" +
-                    (d.scopeAll ? "" : examClassPicker(d)) + examComponentsHtml(d) + examPapersHtml(d);
+                    (d.scopeAll ? "" : examClassPicker(d)) + examPapersHtml(d);
 
                 title = m.id ? "Edit exam" : "Add exam";
             }
@@ -665,6 +674,7 @@ export function initAcademic(env) {
                     subjectId: m.id || "",
                     name: m.draft.name,
                     code: m.draft.code,
+                    parts: m.draft.parts.split(",").map(function (x) { return x.trim(); }).filter(Boolean),
                     sections: sectionsFromDraft(m.draft)
                 });
 
@@ -677,12 +687,18 @@ export function initAcademic(env) {
                     examId: m.id || "",
                     name: m.draft.name,
                     academicYear: m.draft.academicYear,
-                    components: m.draft.components.map(function (c) { return { name: c.name, max: Number(c.max), weight: Number(c.weight) }; }),
                     scope: m.draft.scopeAll
                         ? { all: true }
                         : { all: false, classes: m.draft.rows.map(function (r) { return { class: r.class, sections: r.sections }; }) },
-                    schedule: examPaperRows(m.draft).map(function (r) {
-                        return { class: r.class, subjectId: r.subjectId, date: m.draft.schedule[r.class + "|" + r.subjectId] || "" };
+                    papers: examPaperRows(m.draft).map(function (r) {
+                        const key = r.class + "|" + r.subjectId;
+                        const cell = m.draft.schedule[key] || { date: "", maxes: {} };
+                        return {
+                            class: r.class,
+                            subjectId: r.subjectId,
+                            date: cell.date || "",
+                            parts: r.parts.map(function (part) { return { name: part, max: Number(cell.maxes[part]) }; })
+                        };
                     })
                 });
 
@@ -756,7 +772,7 @@ export function initAcademic(env) {
 
             if (act === "add-subject") {
 
-                S.modal = { type: "subject", id: "", error: "", draft: { class: (S.classes[0] || { class: "" }).class, section: "__all", customSections: [], name: "", code: "" } };
+                S.modal = { type: "subject", id: "", error: "", draft: { class: (S.classes[0] || { class: "" }).class, section: "__all", customSections: [], name: "", code: "", parts: "Total" } };
 
                 return renderModal();
             }
@@ -875,6 +891,12 @@ export function initAcademic(env) {
 
         if (!d) return;
 
+        if (el.dataset.acpKey !== undefined) {
+            const cell = d.schedule[el.dataset.acpKey];
+            if (cell) cell.maxes[el.dataset.acpPart] = el.value;
+            return;
+        }
+
         if (el.dataset.accK !== undefined) {
             d.components[Number(el.dataset.accI)][el.dataset.accK] = el.value;
             return;
@@ -882,6 +904,7 @@ export function initAcademic(env) {
 
         if (el.id === "acName") d.name = el.value;
         else if (el.id === "acCode") d.code = el.value;
+        else if (el.id === "acParts") d.parts = el.value;
         else if (el.id === "acExamName") d.name = el.value;
         else if (el.id === "acYear") d.academicYear = el.value;
     });
@@ -894,7 +917,8 @@ export function initAcademic(env) {
         if (!d) return;
 
         if (el.dataset.acPaper) {
-            d.schedule[el.dataset.acPaper] = el.value;
+            d.schedule[el.dataset.acPaper] = d.schedule[el.dataset.acPaper] || { date: "", maxes: {} };
+            d.schedule[el.dataset.acPaper].date = el.value;
             const tag = modalHost.querySelector("[data-ac-day=\"" + el.dataset.acPaper + "\"]");
             if (tag) tag.textContent = dayLabel(el.value);
             return;

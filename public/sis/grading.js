@@ -45,22 +45,16 @@ const GRADING_TYPES = [
 
 const SECTIONS = [
     { key: "type", label: "Grading type" },
-    { key: "components", label: "Components and weights" },
     { key: "pass", label: "Pass rule" },
     { key: "divisions", label: "Divisions" },
     { key: "rounding", label: "Rounding" },
     { key: "marks", label: "Marks entry" }
 ];
 
-const STANDARD_COMPONENTS = [
-    { name: "Internal assessment", weight: 20 },
-    { name: "External exam", weight: 80 }
-];
 
 // "to verify" values, taken from common published rules. Confirm with the school.
 const DEFAULTS = {
     marks_percentage: {
-        components: STANDARD_COMPONENTS,
         bands: [],
         passRule: { minPercent: 33, allMustPass: true },
         divisions: {
@@ -75,7 +69,6 @@ const DEFAULTS = {
         rounding: { mode: "nearest", decimals: 0 }
     },
     grade_points: {
-        components: STANDARD_COMPONENTS,
         bands: [
             { minMarks: 91, grade: "A1", gradePoint: 10 },
             { minMarks: 81, grade: "A2", gradePoint: 9 },
@@ -92,7 +85,6 @@ const DEFAULTS = {
         rounding: { mode: "nearest", decimals: 1 }
     },
     letter_custom: {
-        components: STANDARD_COMPONENTS,
         bands: [
             { minMarks: 75, grade: "A" },
             { minMarks: 60, grade: "B" },
@@ -105,7 +97,6 @@ const DEFAULTS = {
         rounding: { mode: "nearest", decimals: 0 }
     },
     pass_fail: {
-        components: STANDARD_COMPONENTS,
         bands: [],
         passRule: { minPercent: 33, allMustPass: true },
         divisions: { enabled: false, cutoffs: [] },
@@ -215,7 +206,6 @@ export function initGrading(env) {
         const saved = S.current;
 
         if (key === "type") return f.gradingType !== saved.gradingType || !same(f.bands, saved.bands || []);
-        if (key === "components") return !same(f.components, saved.components);
         if (key === "pass") return !same(f.passRule, saved.passRule);
         if (key === "divisions") return !same(f.divisions, saved.divisions || { enabled: false, cutoffs: [] });
         if (key === "rounding") return !same(f.rounding, saved.rounding);
@@ -380,7 +370,6 @@ export function initGrading(env) {
 
         const body =
             S.section === "type" ? typeSection()
-            : S.section === "components" ? componentsSection()
             : S.section === "pass" ? passSection()
             : S.section === "divisions" ? divisionsSection()
             : S.section === "marks" ? marksSection()
@@ -461,31 +450,7 @@ export function initGrading(env) {
 
     // ---------- section 2: components and weights ----------
 
-    function componentsSection() {
 
-        const f = S.form;
-
-        const sum = f.components.reduce(function (n, c) { return n + (Number(c.weight) || 0); }, 0);
-
-        const rows = f.components.map(function (c, i) {
-            return "<tr><td><input type=\"text\" data-gd=\"cname\" data-i=\"" + i + "\" value=\"" + esc(c.name) +
-                "\" maxlength=\"40\"" + dis() + "></td><td><input type=\"number\" data-gd=\"cweight\" data-i=\"" + i +
-                "\" value=\"" + esc(c.weight) + "\" min=\"1\" max=\"100\" step=\"1\"" + dis() + "></td><td>" +
-                (S.canManage && f.components.length > 1
-                    ? "<button type=\"button\" class=\"ax-btn ax-sm ax-danger\" data-gd=\"cdel\" data-i=\"" + i + "\">Remove</button>"
-                    : "") + "</td></tr>";
-        }).join("");
-
-        return "<section class=\"ax-panel\"><h3 class=\"ax-panel-title\">Components and weights</h3>" +
-            "<p class=\"ax-muted\">What makes up each subject's total. The weights must add up to 100. " +
-            "They add up to <strong>" + sum + "</strong>" + (sum === 100 ? "" : " (should be 100)") + ".</p>" +
-            "<div class=\"ax-table-wrap\"><table class=\"ax-table\"><thead><tr><th>Component</th><th>Weight %</th><th></th></tr></thead><tbody>" +
-            rows + "</tbody></table></div>" +
-            (S.canManage && f.components.length < 6
-                ? "<div class=\"ax-bar\"><button type=\"button\" class=\"ax-btn\" data-gd=\"cadd\">Add component</button></div>"
-                : "") +
-            saveBar("components", "Save components") + "</section>";
-    }
 
 
     // ---------- section 3: pass rule ----------
@@ -592,7 +557,6 @@ export function initGrading(env) {
 
         const p = {
             gradingType: saved.gradingType,
-            components: clone(saved.components),
             bands: clone(saved.bands || []),
             passRule: clone(saved.passRule),
             divisions: clone(saved.divisions || { enabled: false, cutoffs: [] }),
@@ -601,7 +565,6 @@ export function initGrading(env) {
         };
 
         if (key === "type") { p.gradingType = f.gradingType; p.bands = clone(f.bands); }
-        if (key === "components") p.components = clone(f.components);
         if (key === "pass") p.passRule = clone(f.passRule);
         if (key === "divisions") p.divisions = clone(f.divisions);
         if (key === "rounding") p.rounding = clone(f.rounding);
@@ -617,9 +580,6 @@ export function initGrading(env) {
         return {
             institutionId: S.inst,
             gradingType: p.gradingType,
-            components: p.components.map(function (c) {
-                return { name: String(c.name).trim(), weight: Number(c.weight) };
-            }),
             bands: usesBands
                 ? p.bands.map(function (b) {
                     const row = { minMarks: Number(b.minMarks), grade: String(b.grade).trim() };
@@ -695,7 +655,7 @@ export function initGrading(env) {
                 return;
             }
 
-            S.form = { gradingType: value, marksEntry: S.form.marksEntry, ...clone(DEFAULTS[value]), components: S.form.components };
+            S.form = { gradingType: value, marksEntry: S.form.marksEntry, ...clone(DEFAULTS[value]) };
         }
 
         S.error = "";
@@ -711,9 +671,7 @@ export function initGrading(env) {
 
         const kind = el.dataset.gd;
 
-        if (kind === "cname") f.components[i].name = el.value;
-        else if (kind === "cweight") f.components[i].weight = el.value;
-        else if (kind === "bgrade") f.bands[i].grade = el.value;
+        if (kind === "bgrade") f.bands[i].grade = el.value;
         else if (kind === "bmin") f.bands[i].minMarks = el.value;
         else if (kind === "bpoint") f.bands[i].gradePoint = el.value;
         else if (kind === "dname") f.divisions.cutoffs[i].name = el.value;
@@ -758,8 +716,6 @@ export function initGrading(env) {
 
             if (act === "save") return save(t.dataset.sec);
 
-            if (act === "cadd") { f.components.push({ name: "New component", weight: 0 }); return render(); }
-            if (act === "cdel") { f.components.splice(i, 1); return render(); }
 
             if (act === "badd") {
                 const last = f.bands[f.bands.length - 1];
