@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 
 import { initPeople } from "./people.js";
 import { initAttendance } from "./attendance.js";
+import { initMarkAttendance } from "./attendance-mark.js";
 import { initAcademic } from "./academic.js";
 import { initRules } from "./rules.js";
 import { initConfig } from "./config.js";
@@ -67,6 +68,14 @@ const people = initPeople({
 });
 
 const attendance = initAttendance({ db: db });
+
+const markAttendance = initMarkAttendance({
+    db: db,
+    auth: auth,
+    apiBase: AX_API_BASE,
+    toast: function (text, type) { axToast(text, type); },
+    onSaved: function () { attendance.open(); }
+});
 
 const rules = initRules({
     db: db,
@@ -657,7 +666,10 @@ function showPage(
 
     if (page === "classes") people.openClasses();
 
-    if (page === "attendance") attendance.open();
+    if (page === "attendance") {
+        attendance.open();
+        markAttendance.open();
+    }
 
     if (page === "academicRecords") {
         academic.open(pendingAcademicTab || "subjects");
@@ -790,6 +802,7 @@ function setApplicationsContext(uid, userData) {
 
     people.setContext(uid, userData);
     attendance.setContext(userData.institutionId);
+    markAttendance.setContext(userData.institutionId, uid, userData.role, userData.teacherRoles);
     academic.setContext(userData.institutionId, userData.role);
     marks.setContext(userData.institutionId, uid, userData.role, userData.teacherRoles);
     rules.setContext(userData.institutionId, userData.role);
@@ -807,6 +820,7 @@ function resetApplications() {
 
     people.reset();
     attendance.reset();
+    markAttendance.reset();
     academic.reset();
     marks.reset();
     rules.reset();
