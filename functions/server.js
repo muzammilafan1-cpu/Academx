@@ -51,6 +51,9 @@ app.use("/api", createMarksRouter(admin));
 const { createStaffRouter } = require("./staff-routes");
 app.use("/api", createStaffRouter(admin));
 
+const { createAttendanceMarkingRouter } = require("./attendance-marking-routes");
+app.use("/api", createAttendanceMarkingRouter(admin));
+
 const allowedOrigins = [
   "https://academx.in",
   "https://www.academx.in",
